@@ -197,19 +197,15 @@ Create a documented Retell agent setup with:
 
 Verify language, voice, SIP, and phone-number compatibility before enabling production calls.
 
-## 10. Demo Mode and Safety
+## 10. Live Retell and safety
 
-The app must work without live phone credentials.
+Calls use the published Retell agents. The secret API key stays in `RETELL_API_KEY` on the proxy or in n8n. The static site may hold a domain-allowlisted public key only.
 
-In demo mode:
-- Simulate call initiation and status changes.
-- Show a sample AI conversation.
-- Extract sample customer preferences.
-- Save the demo lead to the development database.
-- Display a clear "Demo Mode — No real call is being placed" notice.
-- Never send a real phone call unless an authorized admin explicitly enables live mode and confirms the action.
-
-Do not simulate real customer consent or falsely mark a real call as completed.
+- Web calls use `POST /v3/create-web-call` (public key in the browser, or the proxy).
+- Phone calls use `POST /v2/create-phone-call` with `RETELL_FROM_NUMBER` and the outbound agent. The UI asks for confirmation before dialing.
+- Inbound PSTN needs a number bound in Retell. Until that number exists, the inbound web test and the Retell dashboard web call use the inbound agent.
+- A separate "preview the script" action is labeled and does not contact Retell. It must not be stored as a live call.
+- Do not invent an API key. Do not commit `.env`.
 
 Require customer consent where applicable, disclose AI identity, provide an opt-out mechanism, respect applicable Bangladesh telecom rules, and restrict access to call recordings and transcripts.
 
@@ -217,13 +213,13 @@ Require customer consent where applicable, disclose AI identity, provide an opt-
 
 Deliver:
 1. Working responsive AI Voice Agent admin page.
-2. Interactive simulated outgoing and incoming call demos.
+2. Outbound and inbound Retell web calls, plus phone calls through the proxy when a from-number is set.
 3. Customer lead management and call history pages.
 4. Laravel migrations, models, controllers, routes, and validation.
 5. n8n workflow definitions.
 6. Retell AI integration service and webhook handler.
 7. Environment variable template.
 8. Setup instructions and test cases.
-9. Clear separation between demo and live modes.
+9. A script preview that is labeled and does not contact Retell, separate from live calls.
 
 First inspect the existing project and preserve its architecture and design system. Implement the smallest working end-to-end demo first. Do not overwrite unrelated files or claim external integrations are live unless they have been tested successfully.

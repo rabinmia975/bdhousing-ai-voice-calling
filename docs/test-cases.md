@@ -1,36 +1,46 @@
 # Test Cases
 
-## Demo mode
+## Pages console (no secret in the browser)
 
 | # | Test | Expected |
 |---|---|---|
-| D1 | Dashboard loads | Agent card shows statuses; banner: "Demo Mode — No real call is being placed" |
-| D2 | Test AI Call with valid +880 number | Statuses progress Queued → Initiated → Ringing → In Progress → Completed; conversation panel shows sample dialog |
-| D3 | Call detail | Saved with mode=demo, lead created with is_demo=true, sample extracted preferences |
-| D4 | Invalid phone (missing country code) | Validation error, no call created |
-| D5 | Simulated incoming call | Interactive conversation plays; lead + call saved on completion |
-| D6 | Leads page | New demo lead visible, searchable by name/phone, CSV export works |
-| D7 | Analytics | Call counts include the demo call; mock data is labeled |
+| P1 | Dashboard loads | Provider badge says Retell AI. Outbound agent `agent_2603c7b2c919d2677273e30634` and inbound agent `agent_dc1a3df8b89476e4868363ee98` are visible. Org `org_b6zBp6LIqhl3aV7n`. |
+| P2 | No public key and no proxyUrl | Web and phone buttons are disabled. Setup text names `publicKey` and `RETELL_API_KEY`. The old "Demo Mode — No real call is being placed" banner is absent. |
+| P3 | `publicKey` set to a non-public value | The page warns that the secret key does not belong in `retell-config.js`. |
+| P4 | Valid `public_key_…` or a running proxy | **Start web call** reaches Retell. The activity panel shows a `call_id`. History mode is `live` and provider is `retell`. |
+| P5 | Inbound web test | Uses inbound agent `agent_dc1a3df8b89476e4868363ee98`. Copy on the page explains number binding and the dashboard web test. |
+| P6 | Place phone call with no `RETELL_FROM_NUMBER` | Proxy returns 409 and tells you to bind a number. No call id is stored as completed. |
+| P7 | Place phone call with consent and a from-number | Browser asks you to confirm. Proxy calls `POST /v2/create-phone-call` with the outbound agent. |
+| P8 | Preview the script button | Panel says Retell is not contacted. Saved row mode is `script_preview`. |
+| P9 | Invalid phone | Validation error. No request is sent. |
+| P10 | Leads and CSV | Sample leads search and export. |
+| P11 | Secrets | `RETELL_API_KEY` is absent from `docs/`, `demo/`, and `n8n/`. `.env` is gitignored. |
 
-## Live mode (only with verified credentials)
-
-| # | Test | Expected |
-|---|---|---|
-| L1 | Enable live mode | Requires authorized admin toggle + explicit confirmation |
-| L2 | Test AI Call (consent given) | Laravel job → n8n Workflow A → Retell creates the call; statuses from webhooks |
-| L3 | Retell `call.analyzed` webhook | Extraction saved to ai_call_summaries; idempotent when resent |
-| L4 | Webhook without valid signature | Rejected 401, nothing processed |
-| L5 | Incoming call to Retell number | Retell answers, Workflow B updates Laravel, lead matched or created |
-| L6 | Customer says "no more calls" | outcome=do_not_call; lead status=Do Not Call; next outbound suppressed |
-
-## Safety / compliance
+## Proxy
 
 | # | Test | Expected |
 |---|---|---|
-| S1 | Duplicate call prevention | Outbound job refuses a second active call for the same lead |
-| S2 | Demo label honesty | Demo call records can never be shown as live/completed real calls |
-| S3 | Skippable questions | "Skip" in simulated conversation moves on without data |
-| S4 | Human escalation | Requesting a human creates a follow-up task with callback time |
-| S5 | Opt-out suppression | After opt-out, the leads API excludes the phone from outbound eligibility |
-| S6 | Credentials | No API keys present in frontend JS or committed files |
-| S7 | Rate limits | Repeated webhook/endpoint calls throttled per Laravel config |
+| X1 | `node server/retell-proxy.mjs --self-test` | Passes. |
+| X2 | `GET /health` | `provider` is `retell`. `api_key_configured` is a boolean. The key is not in the body. |
+| X3 | Phone call without `consent_granted: true` | 400. |
+| X4 | Webhook with a bad signature | 401. |
+| X5 | Webhook with a valid HMAC | 204. |
+
+## n8n and Laravel
+
+| # | Test | Expected |
+|---|---|---|
+| L1 | Import outbound and inbound workflows | Import succeeds. Workflows are inactive until you activate them. |
+| L2 | Outbound webhook, web channel | n8n calls `POST /v3/create-web-call` with the outbound or inbound agent id from the environment. |
+| L3 | Outbound webhook, phone channel | Requires consent, E.164 `to_number`, and `RETELL_FROM_NUMBER`. Uses `override_agent_id` of the outbound agent. |
+| L4 | `call_started` / `call_ended` / `call_analyzed` | Workflow B normalizes the event. A bad signature is rejected when the raw body is available. The proxy is the raw-body verifier. |
+| L5 | Customer says "no more calls" | outcome `do_not_call`; next outbound is suppressed by the API that owns the lead. |
+
+## Safety
+
+| # | Test | Expected |
+|---|---|---|
+| S1 | Duplicate active call | Workflow A refuses when `active_call_exists` is true. |
+| S2 | Script preview honesty | Preview rows are `script_preview`, never `live`. |
+| S3 | Opt-out | After opt-out, outbound eligibility excludes the phone. |
+| S4 | Credentials | No API key value is committed. The key name `bdhousing-voice` is documentation only. |

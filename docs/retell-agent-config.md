@@ -1,8 +1,13 @@
 # Retell AI Agent Configuration — BDHousing AI Assistant
 
-> Verify Bangla language + voice support in your Retell account **before** enabling production
-> calls. If Bangla voice quality is unverified, run Bangla conversations only in demo mode until
-> you have listened to test calls and approved them.
+Published agents in workspace **BDHousing** (`org_b6zBp6LIqhl3aV7n`):
+
+| Direction | Agent ID | Used for |
+|---|---|---|
+| Inbound | `agent_dc1a3df8b89476e4868363ee98` | Numbers bound as inbound, and the inbound web test |
+| Outbound | `agent_2603c7b2c919d2677273e30634` | `create-phone-call` (`override_agent_id`) and the outbound web test |
+
+The API key is the one named **bdhousing-voice**. Store it as `RETELL_API_KEY`. The static site uses a separate public key (`public_key_…`) or a proxy. Listen to Bangla and English test calls on these published agents before you rely on them with customers.
 
 ## Agent basics
 
@@ -84,16 +89,23 @@ representative callback time, and end the call politely.
 
 ## Webhook events to configure
 
-Point Retell webhooks at the Laravel endpoint (or n8n first — see workflows):
+Retell posts `call_started`, `call_ended`, and `call_analyzed`.
 
-- `call.started`, `call.analyzed` (extraction), `call.ended`
-- Configure with the shared `RETELL_WEBHOOK_SECRET` and verify the signature on receipt.
+| Destination | When to use it |
+|---|---|
+| `https://<proxy>/v1/retell-webhook` | Preferred. Verifies the raw body with `RETELL_API_KEY`, then forwards to n8n. |
+| `https://<n8n>/webhook/bdhousing/retell-webhook` | Workflow B. Use the proxy in front when n8n parses the body before your code runs. |
+
+The signature header is `X-Retell-Signature` (`v=<unix-ms>,d=<hmac-sha256>`). The HMAC key is the bdhousing-voice API key, not a separate webhook secret. The signed bytes are the raw JSON body concatenated with the timestamp.
+
+No phone number is bound in this repo. After you buy or import one, set its inbound agent and outbound agent to the ids above and copy the E.164 value into `RETELL_FROM_NUMBER`. Until then, web calls (this console or the Retell dashboard) are the test path.
 
 ## Pre-production checklist
 
-- [ ] Bangla voice test calls reviewed and approved
+- [ ] Bangla voice test calls reviewed and approved on the published agents
 - [ ] English voice test calls reviewed and approved
-- [ ] Phone number purchased / SIP trunk verified in Retell
-- [ ] Webhook signature verified end-to-end
-- [ ] Opt-out path tested (DNC suppresses next outbound)
+- [ ] Phone number purchased or imported, inbound and outbound agents bound
+- [ ] `RETELL_FROM_NUMBER` set only on the proxy or n8n
+- [ ] Webhook signature verified end-to-end (`call_started`, `call_ended`, `call_analyzed`)
+- [ ] Opt-out path tested (DNC suppresses the next outbound)
 - [ ] Human escalation path tested

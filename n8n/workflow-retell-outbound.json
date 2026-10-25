@@ -1,0 +1,102 @@
+{
+  "name": "BDHousing — Retell outbound trigger",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bdhousing/retell-outbound",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "out-webhook",
+      "name": "Outbound webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "bdhousing-retell-outbound"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Secret stays in the n8n environment (RETELL_API_KEY). Never paste it into this file.\nconst item = $input.first().json;\nconst headers = item.headers || {};\nconst body = item.body && typeof item.body === 'object' ? item.body : item;\nlet webhookSecret = '';\nlet fromNumber = '';\nlet inboundId = 'agent_dc1a3df8b89476e4868363ee98';\nlet outboundId = 'agent_2603c7b2c919d2677273e30634';\nlet apiKeySet = false;\ntry {\n  webhookSecret = $env.N8N_WEBHOOK_SECRET || $env.PROXY_SHARED_SECRET || '';\n  fromNumber = $env.RETELL_FROM_NUMBER || '';\n  if ($env.RETELL_INBOUND_AGENT_ID) inboundId = $env.RETELL_INBOUND_AGENT_ID;\n  if ($env.RETELL_OUTBOUND_AGENT_ID) outboundId = $env.RETELL_OUTBOUND_AGENT_ID;\n  apiKeySet = Boolean($env.RETELL_API_KEY);\n} catch (err) {\n  throw new Error('n8n is blocking environment access. Allow $env for RETELL_API_KEY, or run server/retell-proxy.mjs instead.');\n}\nif (!apiKeySet) {\n  throw new Error('Set RETELL_API_KEY in the n8n environment. Use the key named bdhousing-voice. Do not paste it into this workflow.');\n}\nif (webhookSecret) {\n  const got = headers['x-n8n-secret'] || headers['x-proxy-secret'] || '';\n  if (got !== webhookSecret) throw new Error('Send the matching X-N8N-Secret header.');\n}\nconst channel = body.channel === 'phone' ? 'phone' : 'web';\nconst agentChoice = body.agent === 'inbound' ? 'inbound' : 'outbound';\nconst vars = {};\nconst source = body.retell_llm_dynamic_variables && typeof body.retell_llm_dynamic_variables === 'object' ? body.retell_llm_dynamic_variables : {};\nfor (const [key, value] of Object.entries(source)) {\n  if (value != null) vars[key] = String(value);\n}\nfor (const key of ['customer_name', 'preferred_language', 'property_interest', 'call_purpose', 'phone']) {\n  if (body[key] != null && vars[key] == null) vars[key] = String(body[key]);\n}\nconst metadata = Object.assign({ source: 'bdhousing-n8n', workspace: 'BDHousing', org_id: 'org_b6zBp6LIqhl3aV7n', agent: agentChoice }, body.metadata || {});\nif (channel === 'phone') {\n  if (body.consent_granted !== true) throw new Error('consent_granted true is required before a phone call.');\n  if (!fromNumber) throw new Error('Set RETELL_FROM_NUMBER after you buy or import a Retell number and bind the outbound agent. Web calls do not need it.');\n  const to = String(body.to_number || '').replace(/[\\s()-]/g, '');\n  if (!/^\\+[1-9]\\d{7,14}$/.test(to)) throw new Error('to_number must be E.164, for example +8801711223344.');\n  return [{ json: { url: 'https://api.retellai.com/v2/create-phone-call', payload: { from_number: fromNumber, to_number: to, override_agent_id: outboundId, override_agent_version: 'latest_published', retell_llm_dynamic_variables: vars, metadata } } }];\n}\nreturn [{ json: { url: 'https://api.retellai.com/v3/create-web-call', payload: { agent_id: agentChoice === 'inbound' ? inboundId : outboundId, agent_version: 'latest_published', retell_llm_dynamic_variables: vars, metadata } } }];"
+      },
+      "id": "out-build",
+      "name": "Build Retell request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $env.RETELL_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.payload }}",
+        "options": {}
+      },
+      "id": "out-retell",
+      "name": "Call Retell",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [560, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const result = $input.first().json;\nif (result.error) {\n  const err = result.error;\n  throw new Error(err.message || err.description || JSON.stringify(err));\n}\nif (!result.call_id && !result.access_token) {\n  throw new Error(result.error_message || result.message || 'Retell did not return a call.');\n}\nreturn [{ json: result }];"
+      },
+      "id": "out-pass",
+      "name": "Pass Retell response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "out-respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [980, 300]
+    }
+  ],
+  "connections": {
+    "Outbound webhook": {
+      "main": [[{ "node": "Build Retell request", "type": "main", "index": 0 }]]
+    },
+    "Build Retell request": {
+      "main": [[{ "node": "Call Retell", "type": "main", "index": 0 }]]
+    },
+    "Call Retell": {
+      "main": [[{ "node": "Pass Retell response", "type": "main", "index": 0 }]]
+    },
+    "Pass Retell response": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": { "templateCredsSetupCompleted": true }
+}

@@ -68,7 +68,7 @@
 - `GET  /api/leads/export` — CSV download
 - `POST /api/ai-calls/outbound` — validate phone + consent → create `ai_calls` row (queued) → dispatch job
 - `POST /api/ai-calls/{id}/cancel` — admin cancel
-- `POST /api/retell/webhook` — **public but signed** (Retell webhook signature), idempotent by `provider_call_id` + event
+- `POST /api/retell/webhook` — **public but signed** (Retell `X-Retell-Signature`), idempotent by `provider_call_id` + event
 - `PATCH /api/ai-calls/{id}/status` — internal status updates from jobs/webhooks
 - `POST /api/leads/{id}/consent` / `POST /api/leads/{id}/opt-out` — consent grant / DNC, opt-out suppresses outbound immediately
 - `POST /api/follow-up-tasks` / `GET /api/follow-up-tasks` — reminders list & create
@@ -76,7 +76,7 @@
 
 ## Webhook handling rules
 
-1. Verify Retell webhook signature header (`X-Retell-Signature`) against `RETELL_WEBHOOK_SECRET` before any processing.
+1. Verify `X-Retell-Signature` against `RETELL_API_KEY` using the raw body (HMAC-SHA256 of `rawBody + timestamp`, five-minute window). The header form is `v=<unix-ms>,d=<hex>`. The Node proxy does this before forwarding.
 2. Idempotency: unique index on `(provider_call_id, event_type)` — replayed events are skipped.
 3. Wrap lead + call updates in `DB::transaction()`.
 4. Queue heavy processing (`ShouldQueue` listeners); webhooks return 200 fast.
@@ -87,8 +87,8 @@
 
 `InitiateAiCallJob(callId)`:
 1. Reload call + lead. Abort if lead has DNC/opt-out, or an active call already exists (duplicate prevention).
-2. If `AI_CALL_MODE=demo` → run `SimulateAiCall` (progress statuses with delays, sample conversation, save extracted sample data, mark `mode=demo`). **No HTTP to telephony.**
-3. If live: `RetellService::createPhoneCall()` using `RETELL_API_KEY` and the agent's `RETELL_AGENT_ID` from env only.
+2. Live phone calls: `RetellService::createPhoneCall()` with `RETELL_API_KEY`, `from_number` = `RETELL_FROM_NUMBER`, and `override_agent_id` = `RETELL_OUTBOUND_AGENT_ID` (`agent_2603c7b2c919d2677273e30634`). Web calls use `POST /v3/create-web-call` with `RETELL_INBOUND_AGENT_ID` or `RETELL_OUTBOUND_AGENT_ID`.
+3. The static console does not simulate a provider. A script-preview button in the Pages UI is labeled and does not call Retell.
 4. Update status from Retell responses / webhooks.
 
 ## Validation highlights
@@ -100,4 +100,4 @@
 
 ## Credentials
 
-All provider credentials live in `.env` (see `.env.example`). Never in frontend JS, never committed.
+All provider credentials live in `.env` (see `.env.example`). `RETELL_API_KEY` is never placed in frontend JS. A Retell public key (`RETELL_PUBLIC_KEY` / `publicKey` in `retell-config.js`) is the only browser credential, and only after its domain allowlist includes the site.
