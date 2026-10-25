@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BDHousing — AI Voice Agent (Demo Mode)</title>
+<title>BDHousing — AI Voice Agent</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="retell-config.js"></script>
 <style>
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   .nav-item.active { background: rgba(255,255,255,.12); color: #fff; }
@@ -12,17 +13,13 @@
   .modal-backdrop { background: rgba(15,23,42,.55); }
   @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(249,115,22,.5);} 70% { box-shadow: 0 0 0 14px rgba(249,115,22,0);} 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0);} }
   .ringing { animation: pulse-ring 1.4s infinite; }
-  .typing span { display:inline-block; width:6px; height:6px; border-radius:50%; background:#94a3b8; margin:0 1px; animation: blink 1s infinite; }
-  .typing span:nth-child(2){ animation-delay:.2s } .typing span:nth-child(3){ animation-delay:.4s }
-  @keyframes blink { 0%,100%{opacity:.2} 50%{opacity:1} }
+  code.k { font-size: 12px; background: #f1f5f9; padding: 1px 6px; border-radius: 6px; }
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
 
 <div class="flex min-h-screen">
-
-  <!-- ============ SIDEBAR (dark navy) ============ -->
-  <aside id="sidebar" class="w-64 bg-[#0b1f3a] text-slate-300 flex flex-col fixed inset-y-0 left-0 z-30 md:static">
+  <aside class="w-64 bg-[#0b1f3a] text-slate-300 flex flex-col fixed inset-y-0 left-0 z-30 md:static">
     <div class="px-5 py-5 border-b border-white/10 flex items-center gap-3">
       <div class="w-9 h-9 rounded-lg bg-orange-500 flex items-center justify-center text-white font-bold">BD</div>
       <div>
@@ -31,126 +28,178 @@
       </div>
     </div>
     <nav class="flex-1 py-4 space-y-1 px-3 text-sm" id="nav">
-      <button data-page="agent" class="nav-item active w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>🤖</span> AI Voice Agent</button>
-      <button data-page="leads" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>👥</span> Customer Leads</button>
-      <button data-page="history" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>📞</span> Call History</button>
-      <button data-page="incoming" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>☎️</span> Incoming Call Demo</button>
+      <button type="button" data-page="agent" class="nav-item active w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>🤖</span> AI Voice Agent</button>
+      <button type="button" data-page="leads" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>👥</span> Customer Leads</button>
+      <button type="button" data-page="history" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>📞</span> Call History</button>
+      <button type="button" data-page="incoming" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>☎️</span> Inbound Calls</button>
     </nav>
     <div class="px-5 py-4 border-t border-white/10 text-xs">
-      <div class="flex items-center gap-2 text-emerald-400"><span class="status-dot bg-emerald-400"></span> <span id="mode-label">Demo Mode — No real call is being placed</span></div>
-      <p class="text-slate-500 mt-2">Provider: Retell AI (simulated)</p>
+      <div class="flex items-center gap-2 text-emerald-400"><span class="status-dot bg-emerald-400" id="mode-dot"></span> <span id="mode-label">Retell AI</span></div>
+      <p class="text-slate-500 mt-2" id="provider-line">Provider: Retell AI</p>
     </div>
   </aside>
 
-  <!-- ============ MAIN ============ -->
-  <main class="flex-1 md:ml-0 ml-64 transition-all" id="main">
+  <main class="flex-1 md:ml-0 ml-64" id="main">
     <header class="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20">
       <div>
         <h1 id="page-title" class="text-xl font-semibold text-slate-900">AI Voice Agent</h1>
-        <p class="text-xs text-slate-500">BDHousing AI Assistant · Retell AI provider</p>
+        <p class="text-xs text-slate-500">BDHousing AI Assistant · Provider: Retell AI</p>
       </div>
       <div class="flex items-center gap-3">
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1">⚠️ Demo Mode — No real call is being placed</span>
+        <span id="provider-badge" class="inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-3 py-1 border"></span>
         <div class="w-9 h-9 rounded-full bg-[#0b1f3a] text-white flex items-center justify-center text-sm">RM</div>
       </div>
     </header>
-
     <div class="p-6 space-y-6" id="content"></div>
   </main>
 </div>
 
-<!-- ============ LEAD / CALL MODAL ============ -->
 <div id="modal" class="hidden fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4">
   <div class="bg-white rounded-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl">
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
       <h3 id="modal-title" class="font-semibold text-slate-900"></h3>
-      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">✕</button>
+      <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">✕</button>
     </div>
     <div id="modal-body" class="px-6 py-4 text-sm"></div>
   </div>
 </div>
 
 <script>
-/* =====================================================================
-   BDHousing AI Voice Agent — DEMO BUILD
-   Demo Mode: everything runs locally in the browser (localStorage).
-   Integration points where the real Laravel API would be called are
-   marked with apiCall() stubs — see docs/laravel-backend-plan.md.
-   Never mark a simulated call as live. No real telephony is touched.
-   ===================================================================== */
+/* BDHousing voice console.
+   Web calls use a Retell public key in the browser, or a proxy that holds RETELL_API_KEY.
+   The secret API key is never read by this file. */
+const RETELL = Object.assign({
+  workspace: "BDHousing",
+  orgId: "org_b6zBp6LIqhl3aV7n",
+  inboundAgentId: "agent_dc1a3df8b89476e4868363ee98",
+  outboundAgentId: "agent_2603c7b2c919d2677273e30634",
+  publicKey: "",
+  proxyUrl: ""
+}, window.BDHOUSING_RETELL || {});
 
-const LS_LEADS = 'bdh_leads_v1', LS_CALLS = 'bdh_calls_v1';
+const SDK_URL = "https://cdn.jsdelivr.net/npm/retell-client-js-sdk@3.0.3/+esm";
+const LS_LEADS = "bdh_leads_v2";
+const LS_CALLS = "bdh_calls_v2";
 const store = {
-  get(k, fallback){ try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } },
-  set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+  get(k, fallback) { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } },
+  set(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
 };
 
-/* ---------- mock/simulated provider status ---------- */
-const AGENT = {
-  name: 'BDHousing AI Assistant',
-  status: 'Active',
-  provider: 'Retell AI',
-  languages: ['Bangla', 'English'],
-  incoming: false,          // live telephony not configured in demo
-  outgoing: false,
-  sip: 'Not configured (demo)',
-  n8n: 'Simulated',
-  laravel: 'Simulated'
-};
+const AGENT = { name: "BDHousing AI Assistant", languages: ["Bangla", "English"] };
+let activity = null;
+let timers = [];
+let sdkPromise = null;
 
-/* ---------- seed sample data (clearly labeled) ---------- */
-function seed(){
+function caps() {
+  const publicKey = String(RETELL.publicKey || "").trim();
+  const proxyUrl = String(RETELL.proxyUrl || "").trim().replace(/\/$/, "");
+  const publicOk = publicKey.startsWith("public_key_");
+  return {
+    publicKey, proxyUrl, publicOk,
+    web: publicOk || Boolean(proxyUrl),
+    phone: Boolean(proxyUrl),
+    usePublic: publicOk,
+    inboundId: RETELL.inboundAgentId,
+    outboundId: RETELL.outboundAgentId
+  };
+}
+function isN8n(url) { return /\/webhook\//.test(url || ""); }
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function later(fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; }
+function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+function loadSdk() { if (!sdkPromise) sdkPromise = import(SDK_URL); return sdkPromise; }
+
+function seed() {
   if (!store.get(LS_LEADS, null)) {
     store.set(LS_LEADS, [
-      { id:'L-1001', full_name:'Sample: Karim Uddin', phone:'+8801711223344', language:'bn', interest_type:'buy', area:'Uttara, Dhaka', property_type:'apartment', budget:'৳80–120 lakh', size_sqft:'1350', bedrooms:'3', timeline:'3 months', financing:'Yes (voluntary)', extra:'Near school', interest_level:'Warm', callback:'2026-10-28 11:00', followup_consent:true, lead_score:72, status:'interested', assigned:'Sales Rep A', is_demo:true, created:'2026-10-22T10:12:00', summary:'Demo sample lead — interested in 3BR Uttara apartment, budget 80–120 lakh, wants callback next week.' },
-      { id:'L-1002', full_name:'Sample: Nusrat Jahan', phone:'+8801899555666', language:'en', interest_type:'rent', area:'Dhanmondi, Dhaka', property_type:'apartment', budget:'৳35–45k/mo', size_sqft:'1100', bedrooms:'2', timeline:'Immediately', financing:'', extra:'', interest_level:'Hot', callback:'', followup_consent:true, lead_score:85, status:'qualified', assigned:'Sales Rep B', is_demo:true, created:'2026-10-24T15:40:00', summary:'Demo sample lead — urgent rental need in Dhanmondi, ready to visit properties this week.' }
+      { id: "L-1001", full_name: "Sample: Karim Uddin", phone: "+8801711223344", language: "bn", interest_type: "buy", area: "Uttara, Dhaka", property_type: "apartment", budget: "৳80–120 lakh", size_sqft: "1350", bedrooms: "3", timeline: "3 months", financing: "Yes (voluntary)", extra: "Near school", interest_level: "Warm", callback: "2026-10-28 11:00", followup_consent: true, lead_score: 72, status: "interested", assigned: "Sales Rep A", is_demo: true, created: "2026-10-22T10:12:00", summary: "Sample lead — interested in a 3BR Uttara apartment, budget 80–120 lakh, wants a callback next week." },
+      { id: "L-1002", full_name: "Sample: Nusrat Jahan", phone: "+8801899555666", language: "en", interest_type: "rent", area: "Dhanmondi, Dhaka", property_type: "apartment", budget: "৳35–45k/mo", size_sqft: "1100", bedrooms: "2", timeline: "Immediately", financing: "", extra: "", interest_level: "Hot", callback: "", followup_consent: true, lead_score: 85, status: "qualified", assigned: "Sales Rep B", is_demo: true, created: "2026-10-24T15:40:00", summary: "Sample lead — urgent rental need in Dhanmondi, ready to visit properties this week." }
     ]);
   }
   if (!store.get(LS_CALLS, null)) {
     store.set(LS_CALLS, [
-      { id:'C-2001', lead:'L-1001', name:'Sample: Karim Uddin', phone:'+8801711223344', direction:'outgoing', started:'2026-10-22T10:12:00', duration:214, status:'completed', outcome:'interested', agent:'BDHousing AI Assistant', mode:'demo', is_demo:true, summary:'Discussed 3BR apartments in Uttara; customer wants a callback next week.', transcript:[
-        {s:'ai', t:'আসসালামু আলাইকুম। আমি BDHousing-এর AI assistant। আপনি কি বাড়ি বা ফ্ল্যাট কেনা, ভাড়া নেওয়া, অথবা property সম্পর্কে তথ্য পেতে আগ্রহী?'},
-        {s:'customer', t:'জি, উত্তরায় একটা ফ্ল্যাট কিনতে চাই।'},
-        {s:'ai', t:'ধন্যবাদ! আপনার নাম জানতে পারি কি?'},
-        {s:'customer', t:'করিম উদ্দিন।'},
-        {s:'ai', t:'আপনার বাজেট কেমন হলে স্বাচ্ছন্দ্যে থাকবে, করিম ভাই?'}
-      ]},
-      { id:'C-2002', lead:'L-1002', name:'Sample: Nusrat Jahan', phone:'+8801899555666', direction:'outgoing', started:'2026-10-24T15:40:00', duration:186, status:'completed', outcome:'callback_requested', agent:'BDHousing AI Assistant', mode:'demo', is_demo:true, summary:'Rental inquiry in Dhanmondi, urgent. Asked for a human representative to call today.', transcript:[
-        {s:'ai', t:'Hello, this is BDHousing’s AI assistant. Are you interested in buying, renting, or property information?'},
-        {s:'customer', t:'Yes, renting in Dhanmondi. Can a real person call me back today?'}
-      ]}
+      { id: "C-2001", lead: "L-1001", name: "Sample: Karim Uddin", phone: "+8801711223344", direction: "outgoing", started: "2026-10-22T10:12:00", duration: 214, status: "completed", outcome: "interested", agent: AGENT.name, mode: "sample", is_demo: true, provider: "retell", summary: "Sample row stored in this browser.", transcript: [
+        { s: "ai", t: "আসসালামু আলাইকুম। আমি BDHousing-এর AI assistant।" },
+        { s: "customer", t: "জি, উত্তরায় একটা ফ্ল্যাট কিনতে চাই।" }
+      ] }
     ]);
   }
 }
 seed();
 
-/* ---------- helpers ---------- */
-const $content = document.getElementById('content');
-const $title = document.getElementById('page-title');
-const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
-const fmtDur  = s => Math.floor(s/60)+'m '+(s%60)+'s';
-const statusColor = { new:'bg-sky-100 text-sky-700', contacted:'bg-slate-200 text-slate-700', interested:'bg-emerald-100 text-emerald-700', qualified:'bg-green-600 text-white', follow_up_required:'bg-amber-100 text-amber-700', converted:'bg-green-700 text-white', not_interested:'bg-rose-100 text-rose-700', do_not_call:'bg-red-600 text-white' };
-const callStatusColor = { queued:'bg-slate-200 text-slate-700', initiated:'bg-sky-100 text-sky-700', ringing:'bg-amber-100 text-amber-700', in_progress:'bg-orange-500 text-white', completed:'bg-green-600 text-white', failed:'bg-red-600 text-white', cancelled:'bg-slate-300 text-slate-600' };
-const apiCall = (path, opts) => { /* REAL INTEGRATION POINT — demo build returns locally */ return null; };
+const $content = document.getElementById("content");
+const $title = document.getElementById("page-title");
+const fmtDate = (iso) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+const fmtDur = (s) => Math.floor((s || 0) / 60) + "m " + ((s || 0) % 60) + "s";
+const statusColor = { new: "bg-sky-100 text-sky-700", contacted: "bg-slate-200 text-slate-700", interested: "bg-emerald-100 text-emerald-700", qualified: "bg-green-600 text-white", follow_up_required: "bg-amber-100 text-amber-700", converted: "bg-green-700 text-white", not_interested: "bg-rose-100 text-rose-700", do_not_call: "bg-red-600 text-white" };
+const callStatusColor = { queued: "bg-slate-200 text-slate-600", registered: "bg-sky-100 text-sky-700", initiated: "bg-sky-100 text-sky-700", ringing: "bg-amber-100 text-amber-700", connecting: "bg-amber-100 text-amber-700", in_progress: "bg-orange-500 text-white", live: "bg-orange-500 text-white", ongoing: "bg-orange-500 text-white", completed: "bg-green-600 text-white", ended: "bg-green-600 text-white", failed: "bg-red-600 text-white", error: "bg-red-600 text-white", cancelled: "bg-slate-300 text-slate-600" };
 
-/* ---------- navigation ---------- */
-document.querySelectorAll('#nav .nav-item').forEach(btn => btn.addEventListener('click', () => {
-  document.querySelectorAll('#nav .nav-item').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const p = btn.dataset.page;
-  $title.textContent = { agent:'AI Voice Agent', leads:'Customer Leads', history:'Call History & Analytics', incoming:'Incoming Call Demo' }[p];
-  if (p === 'agent') renderAgent(); else if (p==='leads') renderLeads(); else if (p==='history') renderHistory(); else renderIncoming();
+function paintChrome() {
+  const c = caps();
+  const badge = document.getElementById("provider-badge");
+  const label = document.getElementById("mode-label");
+  const dot = document.getElementById("mode-dot");
+  const connected = c.web;
+  label.textContent = connected ? "Retell AI connected" : "Retell AI — add a public key or proxy";
+  dot.className = "status-dot " + (connected ? "bg-emerald-400" : "bg-amber-400");
+  badge.textContent = connected ? "Provider: Retell AI" : "Provider: Retell AI — credentials not connected";
+  badge.className = "inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-3 py-1 border " + (connected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200");
+}
+paintChrome();
+
+document.querySelectorAll("#nav .nav-item").forEach((btn) => btn.addEventListener("click", () => {
+  if (activity && activity.kind === "preview") { activity.cancelled = true; clearTimers(); activity = null; }
+  else if (activity && (activity.kind === "web" || activity.kind === "phone")) {
+    const ender = activity.ender;
+    const callId = activity.callId;
+    const kind = activity.kind;
+    finishLive("cancelled");
+    if (kind === "web" && ender) Promise.resolve(ender()).catch(() => {});
+    if (kind === "phone" && callId && caps().proxyUrl && !isN8n(caps().proxyUrl)) {
+      postProxy("stop", { call_id: callId }).catch(() => {});
+    }
+  }
+  document.querySelectorAll("#nav .nav-item").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  const page = btn.dataset.page;
+  $title.textContent = { agent: "AI Voice Agent", leads: "Customer Leads", history: "Call History & Analytics", incoming: "Inbound Calls" }[page];
+  if (page === "agent") renderAgent();
+  else if (page === "leads") renderLeads();
+  else if (page === "history") renderHistory();
+  else renderIncoming();
 }));
-function closeModal(){ document.getElementById('modal').classList.add('hidden'); }
+function closeModal() { document.getElementById("modal").classList.add("hidden"); }
 
-/* =====================================================================
-   PAGE 1 — AI VOICE AGENT (dashboard + outgoing call demo)
-   ===================================================================== */
-let activeSim = null;
-function renderAgent(){
+function statRow(label, on, detail) {
+  return `<div class="flex items-center gap-2"><span class="status-dot ${on ? "bg-emerald-500" : "bg-slate-300"}"></span><span class="text-slate-500">${label}:</span><span class="font-medium">${detail || (on ? "Ready" : "Not connected")}</span></div>`;
+}
+function statCard(label, v) {
+  return `<div class="bg-white rounded-xl border border-slate-200 p-4"><p class="text-xs text-slate-500">${label}</p><p class="text-2xl font-semibold text-slate-900 mt-1">${v}</p></div>`;
+}
+function inputField(label, id, type, ph) {
+  return `<div><label class="block text-slate-600 mb-1" for="${id}">${label}</label><input id="${id}" type="${type}" placeholder="${ph}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></div>`;
+}
+function setupBox() {
+  const c = caps();
+  const keyWarn = c.publicKey && !c.publicOk
+    ? `<p class="text-rose-700 mt-2">The value in <code class="k">publicKey</code> does not start with <code class="k">public_key_</code>. Put the secret API key in <code class="k">RETELL_API_KEY</code> on the proxy or in n8n, and put only the public key here.</p>`
+    : "";
+  if (c.web && !keyWarn) return "";
+  return `<div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+    <p class="font-medium">Agents are wired. A credential is still required before Retell will start a call.</p>
+    <ol class="list-decimal list-inside mt-2 space-y-1 text-xs">
+      <li>Web test: in Retell, create a public key, allowlist this site's domain, and set <code class="k">publicKey</code> in <code class="k">retell-config.js</code>.</li>
+      <li>Phone calls and a server-side web call: run <code class="k">node server/retell-proxy.mjs</code> or import <code class="k">n8n/workflow-retell-outbound.json</code>. Put the key named <b>bdhousing-voice</b> in <code class="k">RETELL_API_KEY</code>, then set <code class="k">proxyUrl</code>.</li>
+    </ol>
+    ${keyWarn}
+  </div>`;
+}
+
+function renderAgent() {
+  const c = caps();
   const calls = store.get(LS_CALLS, []);
-  const completed = calls.filter(c=>c.status==='completed').length;
-  const failed = calls.filter(c=>c.status==='failed').length;
   $content.innerHTML = `
   <div class="bg-white rounded-xl border border-slate-200 p-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
@@ -158,429 +207,548 @@ function renderAgent(){
         <div class="w-14 h-14 rounded-xl bg-[#0b1f3a] flex items-center justify-center text-2xl">🤖</div>
         <div>
           <h2 class="text-lg font-semibold text-slate-900">${AGENT.name}</h2>
-          <p class="text-sm text-slate-500">Provider: ${AGENT.provider} · Languages: ${AGENT.languages.join(', ')}</p>
-          <div class="flex gap-2 mt-2 text-xs">
-            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 bg-emerald-100 text-emerald-700"><span class="status-dot bg-emerald-500"></span>${AGENT.status}</span>
-            <span class="rounded-full px-2.5 py-1 bg-amber-100 text-amber-700">Bangla voice: pending verification</span>
-          </div>
+          <p class="text-sm text-slate-500">Provider: Retell AI · ${esc(RETELL.workspace)} · Org <code class="k">${esc(RETELL.orgId)}</code></p>
+          <p class="text-xs text-slate-500 mt-1">Languages: ${AGENT.languages.join(", ")} · Published agents</p>
         </div>
       </div>
-      <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-        ${statRow('Incoming calls', AGENT.incoming)}
-        ${statRow('Outgoing calls', AGENT.outgoing)}
-        ${connRow('Phone / SIP', AGENT.sip)}
-        ${connRow('n8n', AGENT.n8n)}
-        ${connRow('Laravel API', AGENT.laravel)}
+      <div class="grid grid-cols-1 gap-y-2 text-sm">
+        ${statRow("Web calls", c.web, c.usePublic ? "Public key" : (c.proxyUrl ? "Proxy" : "Add publicKey or proxyUrl"))}
+        ${statRow("Phone calls", c.phone, c.phone ? "Proxy holds RETELL_FROM_NUMBER" : "Needs the proxy")}
+        ${statRow("Outbound agent", true, esc(c.outboundId))}
+        ${statRow("Inbound agent", true, esc(c.inboundId))}
       </div>
     </div>
-    <p class="mt-4 text-xs text-slate-400">Live telephony is not configured, so calling runs in <b>simulation</b>. When Retell API keys, phone number, and n8n are configured, these turn green and "Test AI Call" routes through Laravel → n8n → Retell.</p>
+    <p class="mt-4 text-xs text-slate-500">Outbound web and phone calls use agent <code class="k">${esc(c.outboundId)}</code>. The secret API key stays on the proxy or in n8n. ${c.phone ? "Phone calls dial from the number in RETELL_FROM_NUMBER." : "No from-number is configured in this repo yet. Use a web call, or bind a Retell number and set RETELL_FROM_NUMBER on the server."}</p>
+    ${setupBox()}
   </div>
-
-  <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
-    ${statCard('Total calls', calls.length)}
-    ${statCard('Completed', completed)}
-    ${statCard('Failed', failed)}
-    ${statCard('Interested leads', store.get(LS_LEADS,[]).filter(l=>['interested','qualified'].includes(l.status)).length)}
-    ${statCard('Qualified', store.get(LS_LEADS,[]).filter(l=>l.status==='qualified').length)}
-    ${statCard('Follow-ups', store.get(LS_LEADS,[]).filter(l=>l.callback).length)}
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    ${statCard("Calls in this browser", calls.length)}
+    ${statCard("Live Retell calls", calls.filter((x) => x.mode === "live").length)}
+    ${statCard("Ended", calls.filter((x) => x.status === "ended" || x.status === "completed").length)}
+    ${statCard("Failed", calls.filter((x) => x.status === "failed" || x.status === "error").length)}
   </div>
-
   <div class="grid lg:grid-cols-2 gap-6">
-    <!-- Test AI Call form -->
     <div class="bg-white rounded-xl border border-slate-200 p-6">
-      <h3 class="font-semibold text-slate-900 mb-1">Outgoing Call Demo</h3>
-      <p class="text-xs text-amber-700 mb-4">Simulation — No real phone call will be placed.</p>
+      <h3 class="font-semibold text-slate-900 mb-1">Outbound call</h3>
+      <p class="text-xs text-slate-500 mb-4">Web call talks to the outbound Retell agent in this browser. Phone call asks the proxy to dial the customer with <code class="k">POST /v2/create-phone-call</code>.</p>
       <form id="call-form" class="space-y-3 text-sm">
-        ${inputField('Customer name', 'cname', 'text', 'e.g. Rahim Ahmed')}
-        ${inputField('Customer phone (with country code)', 'cphone', 'tel', '+8801XXXXXXXXX')}
+        ${inputField("Customer name", "cname", "text", "e.g. Rahim Ahmed")}
+        ${inputField("Customer phone (E.164)", "cphone", "tel", "+8801XXXXXXXXX")}
         <div class="grid grid-cols-2 gap-3">
-          <div><label class="block text-slate-600 mb-1">Preferred language</label>
+          <div><label class="block text-slate-600 mb-1" for="clang">Preferred language</label>
             <select id="clang" class="w-full border border-slate-300 rounded-lg px-3 py-2"><option value="bn">Bangla</option><option value="en">English</option></select></div>
-          <div><label class="block text-slate-600 mb-1">Property interest</label>
+          <div><label class="block text-slate-600 mb-1" for="cinterest">Property interest</label>
             <select id="cinterest" class="w-full border border-slate-300 rounded-lg px-3 py-2"><option value="apartment">Apartment</option><option value="house">House</option><option value="land">Land</option><option value="commercial">Commercial</option></select></div>
         </div>
-        <div><label class="block text-slate-600 mb-1">Call purpose</label>
+        <div><label class="block text-slate-600 mb-1" for="cpurpose">Call purpose</label>
           <select id="cpurpose" class="w-full border border-slate-300 rounded-lg px-3 py-2"><option>Lead follow-up</option><option>New property introduction</option><option>General inquiry</option></select></div>
-        <label class="flex items-start gap-2 text-slate-600"><input type="checkbox" id="cconsent" class="mt-0.5"> <span>I confirm this customer has given consent to be called (required for live calls).</span></label>
+        <label class="flex items-start gap-2 text-slate-600"><input type="checkbox" id="cconsent" class="mt-0.5"> <span>I confirm this customer has given consent to be contacted, or I am testing the agent myself.</span></label>
         <p id="form-error" class="hidden text-rose-600 text-xs"></p>
-        <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg py-2.5">📞 Test AI Call</button>
+        <div class="grid grid-cols-2 gap-3">
+          <button type="submit" id="btn-web" class="bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 text-white font-semibold rounded-lg py-2.5" ${c.web ? "" : "disabled"}>Start web call</button>
+          <button type="button" id="btn-phone" class="bg-[#0b1f3a] hover:bg-[#16325c] disabled:bg-slate-300 text-white font-semibold rounded-lg py-2.5" ${c.phone ? "" : "disabled"}>Place phone call</button>
+        </div>
+        <button type="button" id="btn-preview" class="w-full text-xs text-slate-500 underline">Preview the script only. This does not contact Retell.</button>
       </form>
     </div>
-
-    <!-- Call activity panel -->
     <div class="bg-white rounded-xl border border-slate-200 p-6 flex flex-col">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="font-semibold text-slate-900">Call Activity</h3>
-        <span id="sim-status" class="text-xs rounded-full px-3 py-1 bg-slate-200 text-slate-600">Idle</span>
+      <div class="flex items-center justify-between mb-3 gap-2">
+        <h3 class="font-semibold text-slate-900">Call activity</h3>
+        <div class="flex items-center gap-2">
+          <button type="button" id="btn-end" class="hidden text-xs bg-rose-600 text-white rounded-full px-3 py-1">End call</button>
+          <span id="sim-status" class="text-xs rounded-full px-3 py-1 bg-slate-200 text-slate-600">Idle</span>
+        </div>
       </div>
       <div id="sim-panel" class="flex-1 overflow-y-auto space-y-3 max-h-[420px] text-sm">
-        <p class="text-slate-400 text-center py-10">Start a test call to see the simulated AI conversation.</p>
+        <p class="text-slate-400 text-center py-10">Start a Retell web call to talk to the outbound agent. Allow the microphone. GitHub Pages is served over HTTPS, which the browser requires.</p>
       </div>
     </div>
   </div>`;
-  document.getElementById('call-form').addEventListener('submit', startOutgoingSim);
-}
-const statRow = (label, on) => `<div class="flex items-center gap-2"><span class="status-dot ${on?'bg-emerald-500':'bg-slate-300'}"></span><span class="text-slate-500">${label}:</span><span class="font-medium">${on?'Enabled':'Disabled'}</span></div>`;
-const connRow = (label, val) => `<div class="flex items-center gap-2 text-slate-500">${label}: <span class="font-medium text-slate-700">${val}</span></div>`;
-const statCard = (label, v) => `<div class="bg-white rounded-xl border border-slate-200 p-4"><p class="text-xs text-slate-500">${label}</p><p class="text-2xl font-semibold text-slate-900 mt-1">${v}</p></div>`;
-const inputField = (label, id, type, ph) => `<div><label class="block text-slate-600 mb-1">${label}</label><input id="${id}" type="${type}" placeholder="${ph}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></div>`;
-
-/* ---------- outgoing call simulation engine ---------- */
-function startOutgoingSim(e){
-  e.preventDefault();
-  const name = document.getElementById('cname').value.trim();
-  const phone = document.getElementById('cphone').value.trim();
-  const lang = document.getElementById('clang').value;
-  const interest = document.getElementById('cinterest').value;
-  const purpose = document.getElementById('cpurpose').value;
-  const consent = document.getElementById('cconsent').checked;
-  const err = document.getElementById('form-error');
-  if (!name) return showError(err, 'Customer name is required.');
-  if (!/^\+?[1-9]\d{7,14}$/.test(phone.replace(/[\s-]/g,''))) return showError(err, 'Enter a valid phone number with country code, e.g. +8801711223344.');
-  if (!consent) return showError(err, 'Customer consent must be confirmed before any call (even simulated).');
-  err.classList.add('hidden');
-
-  // LIVE MODE INTEGRATION POINT (not reachable in demo build):
-  // POST /api/ai-calls/outbound → Laravel → n8n Workflow A → Retell create-phone-call.
-  // Demo build: run simulation only. Never claim a real call was placed.
-  runSimulation({ name, phone, lang, interest, purpose, direction:'outgoing' });
-}
-function showError(err, msg){ err.textContent = msg; err.classList.remove('hidden'); }
-
-function simScript(name, lang, interest){
-  const bn = lang !== 'en';
-  const s = bn ? [
-    ['ai','আসসালামু আলাইকুম। আমি BDHousing-এর AI assistant। আপনি কি বাড়ি বা ফ্ল্যাট কেনা, ভাড়া নেওয়া, অথবা property সম্পর্কে তথ্য পেতে আগ্রহী?'],
-    ['customer','জি, আমি আগ্রহী।'],
-    ['ai','ধন্যবাদ! আপনার নাম জানতে পারি কি?'],
-    ['customer', name],
-    ['ai','আপনি কোন এলাকায় বাসা খুঁজছেন?'],
-    ['customer','গুলশান, ঢাকা।'],
-    ['ai','আপনার বাজেট কেমন হলে ভালো হয়?'],
-    ['customer','৮০ থেকে ১২০ লাখ টাকা।'],
-    ['ai','কয়টা বেডরুম প্রয়োজন হবে?'],
-    ['customer','তিনটা।'],
-    ['ai','কখন থেকে বাসা নিতে চান?'],
-    ['customer','দুই-তিন মাসের মধ্যে।'],
-    ['ai','আর কিছু বিশেষ চাহিদা আছে কি? (চাইলে এই প্রশ্নটি এড়িয়ে যেতে পারেন)'],
-    ['customer','লিফট আর গাড়ি পার্কিং থাকলে ভালো হয়।'],
-    ['ai','আপনাকে পরে আবার ফোন করতে পারি কি?'],
-    ['customer','জি, অবশ্যই।'],
-    ['ai','ধন্যবাদ, আপনার সময়ের জন্য। BDHousing আপনার সেবায় আছে। আল্লাহ হাফেজ।']
-  ] : [
-    ['ai','Hello! This is BDHousing’s AI assistant. Are you interested in buying, renting, or property information?'],
-    ['customer','Yes, interested.'],
-    ['ai','Thank you! May I have your name?'],
-    ['customer', name],
-    ['ai','Which area are you looking at?'],
-    ['customer','Gulshan, Dhaka.'],
-    ['ai','What is your budget range?'],
-    ['customer','80 to 120 lakh BDT.'],
-    ['ai','How many bedrooms do you need?'],
-    ['customer','Three.'],
-    ['ai','When do you plan to move in?'],
-    ['customer','Within two to three months.'],
-    ['ai','Any special requirements? (You can skip this question)'],
-    ['customer','Lift and parking would be nice.'],
-    ['ai','May we call you again for follow-up?'],
-    ['customer','Yes, of course.'],
-    ['ai','Thank you for your time. BDHousing is at your service. Goodbye!']
-  ];
-  return s;
+  document.getElementById("call-form").addEventListener("submit", (e) => { e.preventDefault(); startOutbound("web"); });
+  document.getElementById("btn-phone").addEventListener("click", () => startOutbound("phone"));
+  document.getElementById("btn-preview").addEventListener("click", () => {
+    const ctx = readForm(false);
+    if (!ctx) return;
+    runScriptPreview(ctx, document.getElementById("sim-panel"), document.getElementById("sim-status"));
+  });
+  document.getElementById("btn-end").addEventListener("click", () => endLive("cancelled"));
 }
 
-function runSimulation(ctx){
-  if (activeSim) return;
-  const panel = document.getElementById('sim-panel');
-  const badge = document.getElementById('sim-status');
-  const callId = 'C-' + Math.floor(1000 + Math.random()*9000);
-  const stages = [
-    ['queued', 'Queued', 700],
-    ['initiated', 'Initiated (simulated)', 900],
-    ['ringing', 'Ringing — simulated connection', 1400],
-    ['in_progress', 'In Progress — AI conversation', 1200]
-  ];
-  activeSim = { id: callId, ctx, cancelled: false, turns: [], startedAt: new Date().toISOString() };
-  panel.innerHTML = `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠️ Simulation — No real phone call is being placed.</p>`;
-  badge.className = 'text-xs rounded-full px-3 py-1 bg-slate-200 text-slate-600';
-  let i = 0;
-  activeSim.target = { panel, badge };
-  const nextStage = () => {
-    if (!activeSim || activeSim.cancelled) return;
-    if (i < stages.length){
-      const [key, label, ms] = stages[i++];
-      badge.textContent = label;
-      badge.className = `text-xs rounded-full px-3 py-1 ${callStatusColor[key]}`;
-      if (key === 'ringing' || key === 'in_progress') badge.classList.add('ringing'); else badge.classList.remove('ringing');
-      badge.className = `text-xs rounded-full px-3 py-1 ${callStatusColor[key]}` + (key==='ringing'||key==='in_progress' ? ' ringing' : '');
-      setTimeout(nextStage, ms);
-    } else { runConversation(); }
+function readForm(requirePhone) {
+  const err = document.getElementById("form-error");
+  const name = document.getElementById("cname").value.trim();
+  const phone = document.getElementById("cphone").value.trim();
+  const compact = phone.replace(/[\s()-]/g, "");
+  if (!name) return showError(err, "Customer name is required.");
+  if (requirePhone && !/^\+[1-9]\d{7,14}$/.test(compact)) return showError(err, "Enter an E.164 phone number, for example +8801711223344.");
+  if (phone && !/^\+[1-9]\d{7,14}$/.test(compact)) return showError(err, "Phone must be E.164 when it is filled in.");
+  if (!document.getElementById("cconsent").checked) return showError(err, "Confirm consent before contacting the customer or testing the agent.");
+  err.classList.add("hidden");
+  return {
+    name,
+    phone: compact,
+    lang: document.getElementById("clang").value,
+    interest: document.getElementById("cinterest").value,
+    purpose: document.getElementById("cpurpose").value,
+    direction: "outgoing"
   };
-  nextStage();
+}
+function showError(err, msg) { if (!err) return null; err.textContent = msg; err.classList.remove("hidden"); return null; }
 
-  function runConversation(){
-    const script = simScript(ctx.name, ctx.lang, ctx.interest);
-    let t = 0;
-    const speak = () => {
-      if (!activeSim || activeSim.cancelled) return;
-      if (t < script.length){
-        const [who, text] = script[t++];
-        activeSim.turns.push({ s: who === 'ai' ? 'ai' : 'customer', t: text });
-        const p = (activeSim.target && activeSim.target.panel) || panel;
-        p.insertAdjacentHTML('beforeend', bubble(who, text));
-        p.scrollTop = p.scrollHeight;
-        setTimeout(speak, who === 'ai' ? 1100 : 900);
-      } else { finishSim('completed'); }
-    };
-    speak();
+function variablesOf(ctx) {
+  const vars = {
+    customer_name: ctx.name,
+    preferred_language: ctx.lang || "bn",
+    property_interest: ctx.interest || "",
+    call_purpose: ctx.purpose || ""
+  };
+  if (ctx.phone) vars.phone = ctx.phone;
+  return vars;
+}
+function metadataOf(ctx) {
+  return { source: "bdhousing-pages", workspace: RETELL.workspace, org_id: RETELL.orgId, direction: ctx.direction || "outgoing" };
+}
+
+async function startOutbound(channel) {
+  const ctx = readForm(channel === "phone");
+  if (!ctx) return;
+  const c = caps();
+  if (location.protocol === "file:") {
+    return showError(document.getElementById("form-error"), "Open this page over HTTPS or http://localhost. The microphone and Retell web calls need a real origin.");
+  }
+  if (channel === "web" && !c.web) return showError(document.getElementById("form-error"), "Set publicKey or proxyUrl in retell-config.js before starting a web call.");
+  if (channel === "phone" && !c.phone) return showError(document.getElementById("form-error"), "Phone calls need proxyUrl. The proxy reads RETELL_API_KEY and RETELL_FROM_NUMBER.");
+  if (channel === "phone" && !window.confirm("Place a real Retell phone call to " + ctx.phone + " using the outbound agent?")) return;
+  if (activity && activity.kind === "web") await endLive("cancelled");
+  else if (activity && activity.kind === "preview") { activity.cancelled = true; clearTimers(); activity = null; }
+  else if (activity && activity.kind === "phone") activity = null;
+  clearTimers();
+  const panel = document.getElementById("sim-panel");
+  const badge = document.getElementById("sim-status");
+  activity = { kind: channel === "phone" ? "phone" : "web", ctx, turns: [], callId: null, session: null, saved: false, panel, badge, started: new Date().toISOString() };
+  panel.innerHTML = `<p class="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">Contacting Retell AI${channel === "phone" ? " to place a phone call" : " to start a web call"} with agent ${esc(c.outboundId)}.</p>`;
+  setBadge("connecting");
+  document.getElementById("btn-end").classList.toggle("hidden", channel === "phone" && isN8n(c.proxyUrl));
+  try {
+    if (channel === "phone") await startPhone(ctx);
+    else if (c.usePublic) await startPublicWeb(c.outboundId, ctx);
+    else await startProxyWeb("outbound", ctx);
+  } catch (err) {
+    failLive(err);
   }
 }
 
-function bubble(who, text){
-  const ai = who === 'ai';
-  return `<div class="flex ${ai?'':'justify-end'}"><div class="${ai?'bg-[#0b1f3a] text-white':'bg-orange-100 text-slate-800'} rounded-xl px-3.5 py-2 max-w-[85%]"><p class="text-[10px] uppercase tracking-wide ${ai?'text-slate-400':'text-orange-500'} mb-0.5">${ai?'AI Assistant':'Customer (simulated)'}</p>${text}</div></div>`;
+async function startPublicWeb(agentId, ctx) {
+  const { RetellClient } = await loadSdk();
+  const client = new RetellClient({ key: caps().publicKey });
+  const call = client.createWebCall({
+    agent_id: agentId,
+    retell_llm_dynamic_variables: variablesOf(ctx),
+    metadata: metadataOf(ctx),
+    transcript: true,
+    hooks: {
+      onStatus: (status) => { if (activity) { activity.callId = call.callId || activity.callId; setBadge(status === "live" ? "live" : status); note("Retell status: " + status + (call.callId ? " · " + call.callId : "")); } },
+      onTranscript: (transcript) => renderTranscript(transcript),
+      onEnd: () => finishLive("ended"),
+      onError: (error) => failLive(error)
+    }
+  });
+  activity.session = call;
+  activity.ender = () => call.end();
 }
 
-function finishSim(status){
-  if (!activeSim) return;
-  const { ctx, turns } = activeSim;
-  const ui = activeSim.target || { panel: document.getElementById('sim-panel'), badge: document.getElementById('sim-status') };
-  const duration = 150 + Math.floor(Math.random()*120);
-  const now = new Date();
-  // simulated extraction → demo lead (is_demo=true, mode=demo)
-  const lead = {
-    id: 'L-' + Math.floor(1000 + Math.random()*9000),
-    full_name: ctx.name, phone: ctx.phone, language: ctx.lang,
-    interest_type: ctx.direction === 'incoming' ? 'general_inquiry' : (ctx.purpose === 'Lead follow-up' ? 'buy' : 'general_inquiry'),
-    area: ctx.direction === 'incoming' ? 'Mirpur, Dhaka' : 'Gulshan, Dhaka',
-    property_type: ctx.interest || 'apartment',
-    budget: '৳80–120 lakh', size_sqft: '1450', bedrooms: '3',
-    timeline: '2–3 months', financing: '', extra: 'Lift & parking preferred',
-    interest_level: 'Hot', callback: new Date(now.getTime()+3*864e5).toISOString().slice(0,16),
-    followup_consent: true, lead_score: 78, status: 'interested',
-    assigned: 'Unassigned', is_demo: true, created: now.toISOString(),
-    summary: `AI call summary (demo): ${ctx.name} is interested in ${ctx.interest||'property'} in ${ctx.direction==='incoming'?'Mirpur':'Gulshan'}, budget ৳80–120 lakh, wants follow-up.`
-  };
+async function startProxyWeb(agent, ctx) {
+  const data = await postProxy("web", { agent, retell_llm_dynamic_variables: variablesOf(ctx), metadata: metadataOf(ctx), channel: "web", consent_granted: true, ...flat(ctx) });
+  if (!data.access_token) throw new Error(data.error || "Retell did not return an access token.");
+  activity.callId = data.call_id;
+  note("Retell web call " + (data.call_id || "") + " · agent " + (data.agent_id || agent));
+  const { RetellWebClient } = await loadSdk();
+  const sdk = new RetellWebClient();
+  sdk.on("call_started", () => setBadge("live"));
+  sdk.on("call_ended", () => finishLive("ended"));
+  sdk.on("error", (error) => failLive(error));
+  sdk.on("update", (update) => {
+    const transcript = update && (update.transcript || update.transcript_object);
+    if (transcript) renderTranscript(transcript);
+  });
+  activity.session = sdk;
+  activity.ender = () => sdk.stopCall();
+  await sdk.startCall({
+    accessToken: data.access_token,
+    callId: data.call_id,
+    transport: data.transport || "gateway",
+    iceServers: data.ice_servers
+  });
+  setBadge("live");
+}
+
+async function startPhone(ctx) {
+  const data = await postProxy("phone", {
+    channel: "phone",
+    agent: "outbound",
+    to_number: ctx.phone,
+    consent_granted: true,
+    retell_llm_dynamic_variables: variablesOf(ctx),
+    metadata: metadataOf(ctx),
+    ...flat(ctx)
+  });
+  activity.callId = data.call_id || null;
+  activity.kind = "phone";
+  setBadge(data.call_status || "registered");
+  note("Retell accepted the phone call" + (data.call_id ? " · " + data.call_id : "") + ". The outbound agent will dial " + esc(ctx.phone) + ". Track it in the Retell dashboard.");
+  saveCall(data.call_status || "registered", "initiated");
+}
+
+function flat(ctx) {
+  return { customer_name: ctx.name, preferred_language: ctx.lang, property_interest: ctx.interest, call_purpose: ctx.purpose, phone: ctx.phone || "" };
+}
+
+async function postProxy(channel, body) {
+  const c = caps();
+  const url = isN8n(c.proxyUrl) ? c.proxyUrl : c.proxyUrl + (channel === "phone" ? "/v1/phone-call" : channel === "stop" ? "/v1/stop-call" : "/v1/web-call");
+  let res;
+  try {
+    res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (err) {
+    throw new Error("The browser could not reach " + url + ". Check proxyUrl and CORS.");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data.error || data.error_message || data.message || ("Retell proxy returned HTTP " + res.status);
+    throw new Error(typeof message === "string" ? message : JSON.stringify(message));
+  }
+  return data;
+}
+
+function setBadge(status) {
+  const badge = (activity && activity.badge) || document.getElementById("sim-status");
+  if (!badge) return;
+  const key = status === "in_progress" ? "live" : status;
+  badge.textContent = "Retell · " + String(status || "idle").replace(/_/g, " ");
+  badge.className = "text-xs rounded-full px-3 py-1 " + (callStatusColor[key] || callStatusColor.queued);
+  badge.classList.toggle("ringing", key === "live" || key === "connecting" || key === "ringing");
+}
+function note(html) {
+  const panel = (activity && activity.panel) || document.getElementById("sim-panel");
+  if (panel) panel.insertAdjacentHTML("beforeend", `<p class="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">${html}</p>`);
+}
+function renderTranscript(items) {
+  if (!activity || !Array.isArray(items)) return;
+  const lines = items.map(lineOf).filter((line) => line.text);
+  activity.turns = lines.map((line) => ({ s: line.who, t: line.text }));
+  const panel = activity.panel;
+  if (!panel) return;
+  const prior = panel.querySelectorAll("[data-turn]");
+  prior.forEach((node) => node.remove());
+  lines.forEach((line) => panel.insertAdjacentHTML("beforeend", bubble(line.who, line.text, false)));
+  panel.scrollTop = panel.scrollHeight;
+}
+function lineOf(item) {
+  if (!item || typeof item !== "object") return { who: "ai", text: "" };
+  const role = item.role || item.speaker || "";
+  const text = typeof item.content === "string" ? item.content : (typeof item.text === "string" ? item.text : "");
+  const who = role === "user" || role === "customer" ? "customer" : "ai";
+  return { who, text };
+}
+function bubble(who, text, preview) {
+  const ai = who === "ai";
+  const label = ai ? "Retell agent" : (preview ? "Script" : "Customer");
+  return `<div data-turn="1" class="flex ${ai ? "" : "justify-end"}"><div class="${ai ? "bg-[#0b1f3a] text-white" : "bg-orange-100 text-slate-800"} rounded-xl px-3.5 py-2 max-w-[85%]"><p class="text-[10px] uppercase tracking-wide ${ai ? "text-slate-400" : "text-orange-500"} mb-0.5">${label}</p>${esc(text)}</div></div>`;
+}
+
+async function endLive(status) {
+  if (!activity || activity.kind === "preview") return;
+  const current = activity;
+  try {
+    if (current.kind === "phone" && current.callId && caps().proxyUrl && !isN8n(caps().proxyUrl)) {
+      await postProxy("stop", { call_id: current.callId });
+    } else if (current.ender) {
+      await current.ender();
+    }
+  } catch (err) {
+    note(esc(err.message || String(err)));
+  }
+  finishLive(status || "ended");
+}
+function failLive(error) {
+  const message = error && error.message ? error.message : String(error || "Retell call failed");
+  if (activity && activity.panel) {
+    activity.panel.insertAdjacentHTML("beforeend", `<p class="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">${esc(message)}</p>`);
+  }
+  const err = document.getElementById("form-error");
+  if (err) showError(err, message);
+  setBadge("failed");
+  saveCall("failed", "failed");
+  const end = document.getElementById("btn-end");
+  if (end) end.classList.add("hidden");
+  activity = null;
+}
+function finishLive(status) {
+  if (!activity || activity.kind === "preview") return;
+  setBadge(status === "cancelled" ? "cancelled" : "ended");
+  saveCall(status === "cancelled" ? "cancelled" : "ended", status === "cancelled" ? "cancelled" : "completed");
+  if (activity.panel) {
+    const id = activity.callId ? " (" + esc(activity.callId) + ")" : "";
+    activity.panel.insertAdjacentHTML("beforeend", `<p class="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Saved in this browser as a live Retell call${id}. The recording stays in the Retell dashboard.</p>`);
+  }
+  const end = document.getElementById("btn-end");
+  if (end) end.classList.add("hidden");
+  activity = null;
+}
+function saveCall(status, outcome) {
+  if (!activity) return;
+  if (!activity.localId) activity.localId = "C-" + Math.floor(1000 + Math.random() * 9000);
+  const ctx = activity.ctx;
+  const now = new Date().toISOString();
   const call = {
-    id: activeSim.id, lead: lead.id, name: lead.full_name, phone: lead.phone,
-    direction: ctx.direction, started: now.toISOString(), duration,
-    status, outcome: status === 'completed' ? 'interested' : status,
-    agent: AGENT.name, mode: 'demo', is_demo: true,
-    summary: lead.summary, transcript: turns
+    id: activity.localId,
+    provider_call_id: activity.callId,
+    lead: null,
+    name: ctx.name,
+    phone: ctx.phone || "web",
+    direction: ctx.direction || "outgoing",
+    started: activity.started || now,
+    duration: Math.max(0, Math.round((Date.now() - new Date(activity.started || now).getTime()) / 1000)),
+    status, outcome,
+    agent: AGENT.name,
+    mode: "live",
+    is_demo: false,
+    provider: "retell",
+    summary: "Live Retell " + (activity.kind || "web") + " call" + (activity.callId ? " " + activity.callId : "") + ".",
+    transcript: activity.turns || []
   };
-  store.set(LS_LEADS, [lead, ...store.get(LS_LEADS, [])]);
-  store.set(LS_CALLS, [call, ...store.get(LS_CALLS, [])]);
-  ui.badge.textContent = status === 'completed' ? 'Completed (simulated)' : status;
-  ui.badge.className = `text-xs rounded-full px-3 py-1 ${callStatusColor[status]}`;
-  ui.panel.insertAdjacentHTML('beforeend',
-    `<div class="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-3 py-2 text-xs">
-      Call finished (simulated). Demo lead <b>${lead.id}</b> and call <b>${call.id}</b> saved to the local demo database.</div>`);
-  activeSim = null;
+  const rest = store.get(LS_CALLS, []).filter((row) => row.id !== call.id);
+  store.set(LS_CALLS, [call, ...rest]);
 }
 
-/* =====================================================================
-   PAGE 2 — CUSTOMER LEADS
-   ===================================================================== */
-function renderLeads(){
+function scriptLines(name, lang) {
+  if (lang === "en") {
+    return [
+      ["ai", "Hello! This is BDHousing’s AI assistant. Are you interested in buying, renting, or property information?"],
+      ["customer", "Yes, interested."],
+      ["ai", "Thank you! May I have your name?"],
+      ["customer", name],
+      ["ai", "Which area are you looking at?"],
+      ["customer", "Gulshan, Dhaka."],
+      ["ai", "Thank you for your time. BDHousing is at your service."]
+    ];
+  }
+  return [
+    ["ai", "আসসালামু আলাইকুম। আমি BDHousing-এর AI assistant। আপনি কি বাড়ি বা ফ্ল্যাট কেনা, ভাড়া নেওয়া, অথবা property সম্পর্কে তথ্য পেতে আগ্রহী?"],
+    ["customer", "জি, আমি আগ্রহী।"],
+    ["ai", "ধন্যবাদ! আপনার নাম জানতে পারি কি?"],
+    ["customer", name],
+    ["ai", "আপনি কোন এলাকায় বাসা খুঁজছেন?"],
+    ["customer", "গুলশান, ঢাকা।"],
+    ["ai", "ধন্যবাদ, আপনার সময়ের জন্য। BDHousing আপনার সেবায় আছে।"]
+  ];
+}
+function runScriptPreview(ctx, panel, badge) {
+  if (activity && activity.kind === "web") return;
+  clearTimers();
+  activity = { kind: "preview", cancelled: false, turns: [], ctx, saved: false, panel, badge, started: new Date().toISOString() };
+  badge.textContent = "Script preview";
+  badge.className = "text-xs rounded-full px-3 py-1 bg-slate-200 text-slate-600";
+  panel.innerHTML = `<p class="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">Script preview. Retell is not contacted and no call is placed.</p>`;
+  const script = scriptLines(ctx.name, ctx.lang);
+  let index = 0;
+  const speak = () => {
+    if (!activity || activity.cancelled || activity.kind !== "preview") return;
+    if (index >= script.length) {
+      activity.saved = true;
+      const call = {
+        id: "C-" + Math.floor(1000 + Math.random() * 9000),
+        name: ctx.name, phone: ctx.phone || "—", direction: ctx.direction || "outgoing",
+        started: activity.started, duration: 0, status: "completed", outcome: "script_preview",
+        agent: AGENT.name, mode: "script_preview", is_demo: true, provider: "retell",
+        summary: "Script preview only. Retell was not contacted.",
+        transcript: activity.turns
+      };
+      store.set(LS_CALLS, [call, ...store.get(LS_CALLS, [])]);
+      panel.insertAdjacentHTML("beforeend", `<p class="text-xs text-slate-500">Preview saved locally and labeled script preview.</p>`);
+      activity = null;
+      return;
+    }
+    const [who, text] = script[index++];
+    activity.turns.push({ s: who === "ai" ? "ai" : "customer", t: text });
+    panel.insertAdjacentHTML("beforeend", bubble(who, text, true));
+    panel.scrollTop = panel.scrollHeight;
+    later(speak, who === "ai" ? 900 : 700);
+  };
+  speak();
+}
+
+function renderLeads() {
   const leads = store.get(LS_LEADS, []);
   $content.innerHTML = `
   <div class="bg-white rounded-xl border border-slate-200 p-4">
     <div class="flex flex-wrap gap-3 items-center text-sm">
       <input id="lead-search" placeholder="Search name or phone…" class="border border-slate-300 rounded-lg px-3 py-2 flex-1 min-w-[200px]">
-      <select id="f-status" class="border border-slate-300 rounded-lg px-3 py-2"><option value="">All statuses</option>${Object.keys(statusColor).map(s=>`<option>${s.replace(/_/g,' ')}</option>`).join('')}</select>
+      <select id="f-status" class="border border-slate-300 rounded-lg px-3 py-2"><option value="">All statuses</option>${Object.keys(statusColor).map((s) => `<option>${s.replace(/_/g, " ")}</option>`).join("")}</select>
       <select id="f-type" class="border border-slate-300 rounded-lg px-3 py-2"><option value="">All property types</option><option>apartment</option><option>house</option><option>land</option><option>commercial</option></select>
-      <button id="export-csv" class="bg-[#0b1f3a] text-white rounded-lg px-4 py-2">Export CSV</button>
+      <button type="button" id="export-csv" class="bg-[#0b1f3a] text-white rounded-lg px-4 py-2">Export CSV</button>
     </div>
   </div>
   <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-        <tr><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Phone</th><th class="px-4 py-3">Interest</th><th class="px-4 py-3">Area</th><th class="px-4 py-3">Budget</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Score</th><th class="px-4 py-3">Last Call</th><th class="px-4 py-3">Follow-up</th><th class="px-4 py-3">Status</th><th class="px-4 py-3"></th></tr>
+        <tr><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Phone</th><th class="px-4 py-3">Interest</th><th class="px-4 py-3">Area</th><th class="px-4 py-3">Budget</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Score</th><th class="px-4 py-3">Status</th><th class="px-4 py-3"></th></tr>
       </thead>
       <tbody id="lead-rows" class="divide-y divide-slate-100"></tbody>
     </table>
   </div>`;
   const draw = () => {
-    const q = (document.getElementById('lead-search').value||'').toLowerCase();
-    const st = (document.getElementById('f-status').value||'').replace(/ /g,'_');
-    const ty = document.getElementById('f-type').value;
-    const rows = leads.filter(l =>
-      (!q || l.full_name.toLowerCase().includes(q) || l.phone.includes(q)) &&
-      (!st || l.status === st) && (!ty || l.property_type === ty));
-    document.getElementById('lead-rows').innerHTML = rows.map(l => `
+    const q = (document.getElementById("lead-search").value || "").toLowerCase();
+    const st = (document.getElementById("f-status").value || "").replace(/ /g, "_");
+    const ty = document.getElementById("f-type").value;
+    const rows = leads.filter((l) => (!q || l.full_name.toLowerCase().includes(q) || l.phone.includes(q)) && (!st || l.status === st) && (!ty || l.property_type === ty));
+    document.getElementById("lead-rows").innerHTML = rows.map((l) => `
       <tr class="hover:bg-slate-50">
-        <td class="px-4 py-3 font-medium">${l.full_name}</td>
-        <td class="px-4 py-3">${l.phone}</td>
-        <td class="px-4 py-3 capitalize">${l.interest_type.replace(/_/g,' ')}</td>
-        <td class="px-4 py-3">${l.area}</td>
-        <td class="px-4 py-3">${l.budget}</td>
-        <td class="px-4 py-3 capitalize">${l.property_type}</td>
-        <td class="px-4 py-3"><span class="font-semibold ${l.lead_score>=80?'text-emerald-600':l.lead_score>=60?'text-amber-600':'text-slate-500'}">${l.lead_score}</span></td>
-        <td class="px-4 py-3">${l.created?fmtDate(l.created):'—'}</td>
-        <td class="px-4 py-3">${l.callback||'—'}</td>
-        <td class="px-4 py-3"><span class="text-xs rounded-full px-2 py-0.5 ${statusColor[l.status]}">${l.status.replace(/_/g,' ')}</span></td>
-        <td class="px-4 py-3"><button onclick="viewLead('${l.id}')" class="text-orange-600 hover:underline text-xs font-medium">View</button></td>
-      </tr>`).join('') || `<tr><td colspan="11" class="px-4 py-8 text-center text-slate-400">No leads match the filters.</td></tr>`;
+        <td class="px-4 py-3 font-medium">${esc(l.full_name)}</td>
+        <td class="px-4 py-3">${esc(l.phone)}</td>
+        <td class="px-4 py-3 capitalize">${esc(l.interest_type).replace(/_/g, " ")}</td>
+        <td class="px-4 py-3">${esc(l.area)}</td>
+        <td class="px-4 py-3">${esc(l.budget)}</td>
+        <td class="px-4 py-3 capitalize">${esc(l.property_type)}</td>
+        <td class="px-4 py-3">${esc(l.lead_score)}</td>
+        <td class="px-4 py-3"><span class="text-xs rounded-full px-2 py-0.5 ${statusColor[l.status] || ""}">${esc(l.status).replace(/_/g, " ")}</span></td>
+        <td class="px-4 py-3"><button type="button" onclick="viewLead('${esc(l.id)}')" class="text-orange-600 hover:underline text-xs font-medium">View</button></td>
+      </tr>`).join("") || `<tr><td colspan="9" class="px-4 py-8 text-center text-slate-400">No leads match the filters.</td></tr>`;
   };
-  ['lead-search','f-status','f-type'].forEach(id => document.getElementById(id).addEventListener('input', draw));
+  ["lead-search", "f-status", "f-type"].forEach((id) => document.getElementById(id).addEventListener("input", draw));
   draw();
-  document.getElementById('export-csv').addEventListener('click', exportCsv);
+  document.getElementById("export-csv").addEventListener("click", exportCsv);
 }
-
-function viewLead(id){
-  const l = store.get(LS_LEADS, []).find(x=>x.id===id); if(!l) return;
-  const calls = store.get(LS_CALLS, []).filter(c=>c.lead===id);
-  document.getElementById('modal-title').textContent = 'Lead ' + l.id + ' — ' + l.full_name;
-  document.getElementById('modal-body').innerHTML = `
+function viewLead(id) {
+  const l = store.get(LS_LEADS, []).find((x) => x.id === id);
+  if (!l) return;
+  const calls = store.get(LS_CALLS, []).filter((c) => c.lead === id);
+  document.getElementById("modal-title").textContent = "Lead " + l.id + " — " + l.full_name;
+  document.getElementById("modal-body").innerHTML = `
     <div class="grid grid-cols-2 gap-3 mb-4">
-      ${kv('Phone', l.phone)} ${kv('Language', l.language)}
-      ${kv('Interest', l.interest_type)} ${kv('Area', l.area)}
-      ${kv('Property type', l.property_type)} ${kv('Budget', l.budget)}
-      ${kv('Size', l.size_sqft+' sqft')} ${kv('Bedrooms', l.bedrooms)}
-      ${kv('Timeline', l.timeline)} ${kv('Interest level', l.interest_level)}
-      ${kv('Follow-up consent', l.followup_consent?'Yes':'No')} ${kv('Assigned rep', l.assigned)}
-      ${kv('Status', l.status.replace(/_/g,' '))} ${kv('Follow-up date', l.callback||'—')}
+      ${kv("Phone", l.phone)} ${kv("Language", l.language)}
+      ${kv("Interest", l.interest_type)} ${kv("Area", l.area)}
+      ${kv("Property type", l.property_type)} ${kv("Budget", l.budget)}
+      ${kv("Status", (l.status || "").replace(/_/g, " "))} ${kv("Follow-up", l.callback || "—")}
     </div>
-    <div class="bg-slate-50 rounded-lg p-3 mb-4"><p class="text-xs uppercase text-slate-500 mb-1">AI call summary</p><p>${l.summary}</p></div>
-    <p class="text-xs uppercase text-slate-500 mb-2">Call history (${calls.length})</p>
-    ${calls.map(c=>`<div class="border border-slate-200 rounded-lg p-3 mb-2 flex justify-between items-center"><div><b>${c.id}</b> · ${c.direction} · ${fmtDate(c.started)} · ${fmtDur(c.duration)}<br><span class="text-slate-500 text-xs">${c.outcome}</span></div><span class="text-xs rounded-full px-2 py-0.5 ${callStatusColor[c.status]}">${c.status}</span></div>`).join('') || '<p class="text-slate-400">No calls yet.</p>'}`;
-  document.getElementById('modal').classList.remove('hidden');
+    <div class="bg-slate-50 rounded-lg p-3 mb-4"><p class="text-xs uppercase text-slate-500 mb-1">Summary</p><p>${esc(l.summary)}</p></div>
+    <p class="text-xs uppercase text-slate-500 mb-2">Related calls (${calls.length})</p>
+    ${calls.map((c) => `<div class="border border-slate-200 rounded-lg p-3 mb-2">${esc(c.id)} · ${esc(c.direction)} · ${esc(c.mode)}</div>`).join("") || "<p class='text-slate-400'>No calls linked yet. Live Retell calls are listed in Call History.</p>"}`;
+  document.getElementById("modal").classList.remove("hidden");
 }
-const kv = (k,v) => `<div><p class="text-xs text-slate-500">${k}</p><p class="font-medium capitalize">${v ?? '—'}</p></div>`;
-
-function exportCsv(){
+const kv = (k, v) => `<div><p class="text-xs text-slate-500">${k}</p><p class="font-medium capitalize">${esc(v ?? "—")}</p></div>`;
+function exportCsv() {
   const leads = store.get(LS_LEADS, []);
-  const head = ['Customer','Phone','Interest Type','Preferred Area','Budget','Property Type','Lead Score','Last Call','Follow-up Date','Status'];
-  const csv = [head.join(',')].concat(leads.map(l =>
-    [l.full_name,l.phone,l.interest_type,l.area,l.budget,l.property_type,l.lead_score,l.created,l.callback,l.status]
-    .map(v=>`"${(v??'').toString().replace(/"/g,'""')}"`).join(','))).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-  a.download = 'bdhousing-leads.csv'; a.click();
+  const head = ["Customer", "Phone", "Interest Type", "Preferred Area", "Budget", "Property Type", "Lead Score", "Status"];
+  const csv = [head.join(",")].concat(leads.map((l) => [l.full_name, l.phone, l.interest_type, l.area, l.budget, l.property_type, l.lead_score, l.status].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "bdhousing-leads.csv";
+  a.click();
 }
 
-/* =====================================================================
-   PAGE 3 — CALL HISTORY & ANALYTICS
-   ===================================================================== */
-function renderHistory(){
+function renderHistory() {
   const calls = store.get(LS_CALLS, []);
-  const leads = store.get(LS_LEADS, []);
   $content.innerHTML = `
-  <div class="grid grid-cols-2 md:grid-cols-7 gap-3">
-    ${statCard('Total calls', calls.length)}
-    ${statCard('Answered', calls.filter(c=>c.status==='completed'||c.status==='in_progress').length)}
-    ${statCard('Completed', calls.filter(c=>c.status==='completed').length)}
-    ${statCard('Interested', leads.filter(l=>l.status==='interested').length)}
-    ${statCard('Qualified', leads.filter(l=>l.status==='qualified').length)}
-    ${statCard('Failed', calls.filter(c=>c.status==='failed').length)}
-    ${statCard('Follow-up tasks', leads.filter(l=>l.callback).length)}
-  </div>
-  <div class="bg-white rounded-xl border border-slate-200 p-4 text-xs text-slate-500">Data source: local demo database (records created in this browser). Sample seed rows are labeled "Sample". In a connected deployment this page reads live Laravel API data.</div>
+  <div class="bg-white rounded-xl border border-slate-200 p-4 text-xs text-slate-500">Rows live in this browser. Calls with mode <b>live</b> were sent to Retell AI. Sample rows and script previews are labeled. Recordings and the official transcript stay in the Retell dashboard.</div>
   <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-        <tr><th class="px-4 py-3">Call ID</th><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Direction</th><th class="px-4 py-3">Start</th><th class="px-4 py-3">Duration</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Agent</th><th class="px-4 py-3">Outcome</th><th class="px-4 py-3">Summary</th><th class="px-4 py-3"></th></tr>
+        <tr><th class="px-4 py-3">Call</th><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Direction</th><th class="px-4 py-3">Start</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Mode</th><th class="px-4 py-3"></th></tr>
       </thead>
-      <tbody>${calls.map(c=>`
+      <tbody>${calls.map((c) => `
         <tr class="hover:bg-slate-50">
-          <td class="px-4 py-3 font-medium">${c.id}${c.is_demo?' <span class="text-[10px] text-amber-600 bg-amber-50 rounded px-1">demo</span>':''}</td>
-          <td class="px-4 py-3">${c.name}</td>
-          <td class="px-4 py-3 capitalize">${c.direction}</td>
+          <td class="px-4 py-3 font-medium">${esc(c.provider_call_id || c.id)}</td>
+          <td class="px-4 py-3">${esc(c.name)}</td>
+          <td class="px-4 py-3 capitalize">${esc(c.direction)}</td>
           <td class="px-4 py-3">${fmtDate(c.started)}</td>
-          <td class="px-4 py-3">${fmtDur(c.duration)}</td>
-          <td class="px-4 py-3"><span class="text-xs rounded-full px-2 py-0.5 ${callStatusColor[c.status]}">${c.status.replace(/_/g,' ')}</span></td>
-          <td class="px-4 py-3">${c.agent}</td>
-          <td class="px-4 py-3 capitalize">${c.outcome||'—'}</td>
-          <td class="px-4 py-3 max-w-[240px] truncate" title="${c.summary||''}">${c.summary||'—'}</td>
-          <td class="px-4 py-3"><button onclick="viewCall('${c.id}')" class="text-orange-600 hover:underline text-xs font-medium">Transcript</button></td>
-        </tr>`).join('')}</tbody>
+          <td class="px-4 py-3"><span class="text-xs rounded-full px-2 py-0.5 ${callStatusColor[c.status] || "bg-slate-200"}">${esc(String(c.status || "").replace(/_/g, " "))}</span></td>
+          <td class="px-4 py-3">${esc(c.mode)}${c.provider ? " · " + esc(c.provider) : ""}</td>
+          <td class="px-4 py-3"><button type="button" onclick="viewCall('${esc(c.id)}')" class="text-orange-600 hover:underline text-xs font-medium">Transcript</button></td>
+        </tr>`).join("")}</tbody>
     </table>
   </div>`;
 }
-function viewCall(id){
-  const c = store.get(LS_CALLS, []).find(x=>x.id===id); if(!c) return;
-  document.getElementById('modal-title').textContent = 'Call ' + c.id;
-  document.getElementById('modal-body').innerHTML = `
+function viewCall(id) {
+  const c = store.get(LS_CALLS, []).find((x) => x.id === id);
+  if (!c) return;
+  document.getElementById("modal-title").textContent = "Call " + (c.provider_call_id || c.id);
+  document.getElementById("modal-body").innerHTML = `
     <div class="flex flex-wrap gap-2 mb-4 text-xs">
-      <span class="rounded-full px-2 py-0.5 ${callStatusColor[c.status]}">${c.status}</span>
-      <span class="rounded-full px-2 py-0.5 bg-slate-200 text-slate-700 capitalize">${c.direction}</span>
-      <span class="rounded-full px-2 py-0.5 bg-amber-100 text-amber-700">mode: ${c.mode}</span>
-      <span class="rounded-full px-2 py-0.5 bg-slate-100 text-slate-600">${fmtDur(c.duration)}</span>
+      <span class="rounded-full px-2 py-0.5 ${callStatusColor[c.status] || "bg-slate-200"}">${esc(c.status)}</span>
+      <span class="rounded-full px-2 py-0.5 bg-slate-200">${esc(c.mode)}</span>
+      <span class="rounded-full px-2 py-0.5 bg-emerald-50 text-emerald-700">Retell AI</span>
+      <span class="rounded-full px-2 py-0.5 bg-slate-100">${fmtDur(c.duration)}</span>
     </div>
-    <div class="bg-slate-50 rounded-lg p-3 mb-4"><p class="text-xs uppercase text-slate-500 mb-1">Outcome summary</p>${c.summary||'—'}</div>
-    <p class="text-xs uppercase text-slate-500 mb-2">Transcript ${c.is_demo?'(simulated demo conversation)':''}</p>
-    <div class="space-y-2">${(c.transcript||[]).map(x=>bubble(x.s==='ai'?'ai':'customer', x.t)).join('') || '<p class="text-slate-400">No transcript available.</p>'}</div>`;
-  document.getElementById('modal').classList.remove('hidden');
+    <div class="bg-slate-50 rounded-lg p-3 mb-4">${esc(c.summary || "—")}</div>
+    <div class="space-y-2">${(c.transcript || []).map((x) => bubble(x.s === "ai" ? "ai" : "customer", x.t, c.mode !== "live")).join("") || "<p class='text-slate-400'>No transcript captured in the browser. Open the call in the Retell dashboard.</p>"}</div>`;
+  document.getElementById("modal").classList.remove("hidden");
 }
 
-/* =====================================================================
-   PAGE 4 — INCOMING CALL DEMO
-   ===================================================================== */
-function renderIncoming(){
+function renderIncoming() {
+  const c = caps();
   $content.innerHTML = `
   <div class="grid lg:grid-cols-2 gap-6">
-    <div class="bg-white rounded-xl border border-slate-200 p-6">
-      <h3 class="font-semibold text-slate-900 mb-1">Incoming Call Workflow</h3>
-      <p class="text-xs text-amber-700 mb-4">Live incoming calling is not configured — this is an interactive simulation.</p>
-      <ol class="text-sm space-y-2 list-decimal list-inside text-slate-600 mb-5">
-        <li>Caller dials the BDHousing number → provider routes to Retell AI</li>
-        <li>Retell greets the caller and identifies intent</li>
-        <li>AI answers only from verified property data / approved FAQs</li>
-        <li>AI collects lead information, one question at a time</li>
-        <li>Offers a human callback if requested</li>
-        <li>Result saved through the Laravel API (Workflow B)</li>
+    <div class="bg-white rounded-xl border border-slate-200 p-6 text-sm">
+      <h3 class="font-semibold text-slate-900 mb-1">Inbound on Retell AI</h3>
+      <p class="text-xs text-slate-500 mb-4">Provider: Retell AI. The published inbound agent answers. This page does not simulate a phone network.</p>
+      <dl class="space-y-2 text-xs mb-4">
+        <div class="flex justify-between gap-3"><dt class="text-slate-500">Workspace</dt><dd>${esc(RETELL.workspace)}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-slate-500">Org</dt><dd><code class="k">${esc(RETELL.orgId)}</code></dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-slate-500">Inbound agent</dt><dd><code class="k">${esc(c.inboundId)}</code></dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-slate-500">Outbound agent</dt><dd><code class="k">${esc(c.outboundId)}</code></dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-slate-500">From number</dt><dd>${c.phone ? "Set on the proxy as RETELL_FROM_NUMBER" : "Not bound yet"}</dd></div>
+      </dl>
+      <h4 class="font-medium text-slate-900 mb-1">Bind a phone number</h4>
+      <ol class="list-decimal list-inside text-xs text-slate-600 space-y-1 mb-4">
+        <li>In the Retell dashboard open Phone Numbers and buy or import a number.</li>
+        <li>Set the inbound agent to <code class="k">${esc(c.inboundId)}</code>.</li>
+        <li>Set the outbound agent to <code class="k">${esc(c.outboundId)}</code> if this number should also dial out.</li>
+        <li>Set the agent webhook to <code class="k">https://&lt;proxy&gt;/v1/retell-webhook</code> or the n8n path <code class="k">/webhook/bdhousing/retell-webhook</code>.</li>
+        <li>Subscribe to <code class="k">call_started</code>, <code class="k">call_ended</code>, and <code class="k">call_analyzed</code>. Signatures use the <b>bdhousing-voice</b> API key.</li>
+        <li>Put that number in <code class="k">RETELL_FROM_NUMBER</code> on the proxy or n8n. Leave it empty until the number exists.</li>
       </ol>
-      <button id="btn-incoming" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg py-2.5">☎️ Simulate Incoming Call</button>
+      <p class="text-xs text-slate-500 mb-4">Until a number is bound, use the web test below or the Retell dashboard: open the inbound agent and start a web call. Both reach the same published agent.</p>
+      <button type="button" id="btn-in-web" class="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 text-white font-semibold rounded-lg py-2.5" ${c.web ? "" : "disabled"}>Start inbound web test</button>
+      <p id="in-error" class="hidden text-rose-600 text-xs mt-2"></p>
+      <button type="button" id="btn-in-preview" class="w-full text-xs text-slate-500 underline mt-3">Preview the inbound script only. This does not contact Retell.</button>
     </div>
     <div class="bg-white rounded-xl border border-slate-200 p-6 flex flex-col">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="font-semibold text-slate-900">Simulated Conversation</h3>
+        <h3 class="font-semibold text-slate-900">Inbound activity</h3>
         <span id="inc-status" class="text-xs rounded-full px-3 py-1 bg-slate-200 text-slate-600">Idle</span>
       </div>
-      <div id="inc-panel" class="flex-1 overflow-y-auto space-y-3 max-h-[420px] text-sm">
-        <p class="text-slate-400 text-center py-10">Click "Simulate Incoming Call" to play the workflow.</p>
+      <div id="inc-panel" class="flex-1 overflow-y-auto space-y-3 max-h-[480px] text-sm">
+        <p class="text-slate-400 text-center py-10">A web test uses your microphone and the inbound Retell agent. A caller who dials the bound number reaches that same agent.</p>
       </div>
     </div>
   </div>`;
-  document.getElementById('btn-incoming').addEventListener('click', () => {
-    if (activeSim) return;
-    // Reuse the simulation engine pointed at the incoming panel
-    const panel = document.getElementById('sim-panel');
-    const badge = document.getElementById('sim-status');
-    // temporarily bind engine outputs to the incoming panel
-    const simPanel = document.getElementById('inc-panel');
-    const simStatus = document.getElementById('inc-status');
-    const engine = { panel: simPanel, badge: simStatus };
-    activeSim = { id:'C-'+Math.floor(1000+Math.random()*9000), ctx:{ name:'Incoming caller', phone:'+8801XXXXXXXXX', lang:'bn', interest:'apartment', purpose:'Incoming', direction:'incoming' }, cancelled:false, turns:[] , startedAt:new Date().toISOString(), target:engine };
-    simPanel.innerHTML = `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠️ Simulation — No real phone call is being placed.</p>`;
-    simStatus.textContent = 'In Progress — AI conversation';
-    simStatus.className = 'text-xs rounded-full px-3 py-1 ' + callStatusColor.in_progress;
-    const script = [
-      ['ai','আসসালামু আলাইকুম। BDHousing-এ আপনাকে স্বাগতম। আমি BDHousing-এর AI assistant। কীভাবে সাহায্য করতে পারি?'],
-      ['customer','মিরপুরে একটা ফ্ল্যাট ভাড়া নিতে চাই। কি কি আছে?'],
-      ['ai','আপনার জন্য মিরপুরে কয়েকটি ভেরিফায়েড লিস্টিং আছে। বাজেট কেমন হলে ভালো হয়?'],
-      ['customer','মাসে ২০–৩০ হাজার টাকা।'],
-      ['ai','আপনার নাম ও একটি ফোন নম্বর দিতে পারবেন কি? প্রতিনিধি আপনাকে ডিটেইলস দিতে পারবেন।'],
-      ['customer','হুম, মানুষের সাথে কথা বলতে চাই।'],
-      ['ai','অবশ্যই। আমাদের একজন প্রতিনিধি আপনাকে আজই কলব্যাক দিবেন। ধন্যবাদ, BDHousing-এ কল করার জন্য।']
-    ];
-    let t = 0;
-    const speak = () => {
-      if (!activeSim || activeSim.cancelled) return;
-      if (t < script.length){
-        const [who, text] = script[t++];
-        activeSim.turns.push({ s: who === 'ai' ? 'ai' : 'customer', t: text });
-        simPanel.insertAdjacentHTML('beforeend', bubble(who, text));
-        simPanel.scrollTop = simPanel.scrollHeight;
-        setTimeout(speak, who==='ai' ? 1200 : 1000);
-      } else {
-        // finish: save with callback_requested outcome
-        finishSim('completed');
-      }
-    };
-    speak();
+  document.getElementById("btn-in-web").addEventListener("click", startInboundWeb);
+  document.getElementById("btn-in-preview").addEventListener("click", () => {
+    runScriptPreview({ name: "Inbound caller", phone: "", lang: "bn", interest: "apartment", purpose: "Inbound web test", direction: "incoming" }, document.getElementById("inc-panel"), document.getElementById("inc-status"));
   });
 }
+
+async function startInboundWeb() {
+  const c = caps();
+  const err = document.getElementById("in-error");
+  if (location.protocol === "file:") return showError(err, "Open this page over HTTPS or localhost before starting a Retell web call.");
+  if (!c.web) return showError(err, "Set publicKey or proxyUrl in retell-config.js. The inbound agent id is already " + c.inboundId + ".");
+  if (activity && activity.kind === "web") await endLive("cancelled");
+  else if (activity && activity.kind === "preview") { activity.cancelled = true; clearTimers(); activity = null; }
+  clearTimers();
+  const ctx = { name: "Web tester", phone: "", lang: "bn", interest: "", purpose: "Inbound web test", direction: "incoming" };
+  activity = { kind: "web", ctx, turns: [], callId: null, session: null, saved: false, panel: document.getElementById("inc-panel"), badge: document.getElementById("inc-status"), started: new Date().toISOString() };
+  activity.panel.innerHTML = `<p class="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">Starting a real Retell web call with inbound agent ${esc(c.inboundId)}.</p>`;
+  setBadge("connecting");
+  try {
+    if (c.usePublic) await startPublicWeb(c.inboundId, ctx);
+    else await startProxyWeb("inbound", ctx);
+  } catch (error) {
+    failLive(error);
+  }
+}
+
 renderAgent();
 </script>
 </body>

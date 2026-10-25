@@ -1,5 +1,6 @@
 {
   "name": "BDHousing — Workflow A: Outgoing Calls",
+  "active": false,
   "nodes": [
     {
       "parameters": {
@@ -8,104 +9,57 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "a1-webhook",
-      "name": "Webhook (Laravel → n8n)",
+      "id": "a-webhook",
+      "name": "Laravel webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-200, 300],
-      "webhookId": "PLACEHOLDER-BDHOUSING-OUTGOING"
+      "position": [0, 300],
+      "webhookId": "bdhousing-outgoing-call"
     },
     {
       "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true, "version": 2 },
-          "conditions": [
-            {
-              "leftValue": "={{$json.headers['x-n8n-secret']}}",
-              "rightValue": "PLACEHOLDER_N8N_WEBHOOK_SECRET",
-              "operator": { "type": "string", "operation": "equals" }
-            },
-            {
-              "leftValue": "={{$json.body.call.mode}}",
-              "rightValue": "live",
-              "operator": { "type": "string", "operation": "equals" }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Laravel (or any backend) asks n8n to place a real outbound phone call.\n// RETELL_API_KEY stays in the n8n environment.\nconst item = $input.first().json;\nconst headers = item.headers || {};\nconst body = item.body && typeof item.body === 'object' ? item.body : item;\nconst call = body.call || body;\nlet secret = '';\nlet fromNumber = '';\nlet outboundId = 'agent_2603c7b2c919d2677273e30634';\nlet laravel = '';\nlet apiKeySet = false;\ntry {\n  secret = $env.N8N_WEBHOOK_SECRET || '';\n  fromNumber = $env.RETELL_FROM_NUMBER || '';\n  if ($env.RETELL_OUTBOUND_AGENT_ID) outboundId = $env.RETELL_OUTBOUND_AGENT_ID;\n  laravel = ($env.LARAVEL_API_URL || '').replace(/\\/$/, '');\n  apiKeySet = Boolean($env.RETELL_API_KEY);\n} catch (err) {\n  throw new Error('Allow n8n environment access so RETELL_API_KEY can be read.');\n}\nif (secret && (headers['x-n8n-secret'] || '') !== secret) throw new Error('X-N8N-Secret mismatch.');\nif (!apiKeySet) throw new Error('Set RETELL_API_KEY in n8n (key name bdhousing-voice).');\nif (call.mode && call.mode !== 'live') throw new Error('Refusing a payload that is not mode=live.');\nif (call.active_call_exists) throw new Error('Active call already exists for this lead.');\nif (call.consent_granted === false) throw new Error('Consent was not granted.');\nconst phone = String(call.phone || call.to_number || '').replace(/[\\s()-]/g, '');\nif (!/^\\+[1-9]\\d{7,14}$/.test(phone)) throw new Error('Phone must be E.164.');\nif (!fromNumber) throw new Error('Set RETELL_FROM_NUMBER. Bind that Retell number to outbound agent agent_2603c7b2c919d2677273e30634.');\nreturn [{ json: {\n  laravel_call_id: call.id || '',\n  forward_to_laravel: laravel && call.id ? 'yes' : 'no',\n  laravel_url: laravel && call.id ? laravel + '/api/ai-calls/' + call.id + '/status' : '',\n  url: 'https://api.retellai.com/v2/create-phone-call',\n  payload: {\n    from_number: fromNumber,\n    to_number: phone,\n    override_agent_id: outboundId,\n    override_agent_version: 'latest_published',\n    retell_llm_dynamic_variables: {\n      customer_name: String(call.customer_name || ''),\n      preferred_language: String(call.preferred_language || 'bn'),\n      property_interest: String(call.property_interest || ''),\n      call_purpose: String(call.call_purpose || 'Lead follow-up')\n    },\n    metadata: { source: 'bdhousing-n8n', workspace: 'BDHousing', org_id: 'org_b6zBp6LIqhl3aV7n', laravel_call_id: String(call.id || '') }\n  }\n} }];"
       },
-      "id": "a2-guard",
-      "name": "Secret + Mode Guard (manual pause: disable this node to halt everything)",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [0, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// duplicate prevention: skip if Laravel already flagged an active call\nconst b = $json.body.call;\nif (b.active_call_exists) {\n  throw new Error(`Active call already exists for lead ${b.lead_id}`);\n}\nif (!b.consent_granted) {\n  throw new Error(`No consent for lead ${b.lead_id} — refusing to dial`);\n}\nreturn [{ json: b }];"
-      },
-      "id": "a3-checks",
-      "name": "Consent + Duplicate Checks",
+      "id": "a-build",
+      "name": "Build phone call",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 300]
+      "position": [280, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.retellai.com/v2/create-phone-call",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "={{ $json.url }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer PLACEHOLDER_RETELL_API_KEY" }
+            { "name": "Authorization", "value": "={{ 'Bearer ' + $env.RETELL_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"agent_id\": \"PLACEHOLDER_RETELL_AGENT_ID\",\n  \"from_number_id\": \"PLACEHOLDER_RETELL_PHONE_NUMBER_ID\",\n  \"to_number\": \"{{$json.phone}}\",\n  \"retell_llm_dynamic_variables\": {\n    \"customer_name\": \"{{$json.customer_name}}\",\n    \"preferred_language\": \"{{$json.preferred_language}}\",\n    \"property_interest\": \"{{$json.property_interest}}\",\n    \"call_purpose\": \"{{$json.call_purpose}}\"\n  }\n}",
-        "options": {
-          "retry": { "maxTries": 3, "waitBetweenTries": 5000 },
-          "response": { "response": { "responseFormat": "json" } }
-        }
+        "jsonBody": "={{ $json.payload }}",
+        "options": {}
       },
-      "id": "a4-retell",
-      "name": "Retell — Create Phone Call",
+      "id": "a-retell",
+      "name": "Call Retell",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 300],
+      "position": [560, 300],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "PLACEHOLDER_LARAVEL_API_URL/api/ai-calls/{{$json.body?.call_id || $('Webhook (Laravel → n8n)').item.json.body.call.id}}/status",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "X-N8N-Secret", "value": "PLACEHOLDER_N8N_WEBHOOK_SECRET" }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ status: $json.error || $json.message ? 'failed' : 'initiated', provider_call_id: $json.call?.id, error_message: $json.message || null }) }}",
-        "options": { "retry": { "maxTries": 3, "waitBetweenTries": 5000 } }
+        "mode": "runOnceForAllItems",
+        "jsCode": "const built = $('Build phone call').first().json;\nconst result = $input.first().json;\nconst failed = Boolean(result.error || result.message && !result.call_id);\nreturn [{ json: {\n  forward_to_laravel: built.forward_to_laravel,\n  laravel_url: built.laravel_url,\n  status_body: {\n    status: failed ? 'failed' : 'initiated',\n    provider_call_id: result.call_id || null,\n    error_message: failed ? (result.message || result.error || 'Retell rejected the call') : null\n  },\n  retell: {\n    provider: 'retell',\n    call_id: result.call_id || null,\n    call_status: result.call_status || (failed ? 'error' : 'registered'),\n    agent_id: result.agent_id || null\n  }\n} }];"
       },
-      "id": "a5-laravel",
-      "name": "Laravel — Update Call Status",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [660, 300]
-    },
-    {
-      "parameters": { "respondWith": "json", "responseBody": "={{ JSON.stringify({ ok: true }) }}", "options": {} },
-      "id": "a6-respond",
-      "name": "Respond to Laravel",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [880, 300]
+      "id": "a-shape",
+      "name": "Shape result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 300]
     },
     {
       "parameters": {
@@ -113,51 +67,81 @@
           "options": { "caseSensitive": true, "version": 2 },
           "conditions": [
             {
-              "leftValue": "={{ $json.error }}",
-              "rightValue": "",
-              "operator": { "type": "string", "operation": "notEquals" }
+              "leftValue": "={{ $json.forward_to_laravel }}",
+              "rightValue": "yes",
+              "operator": { "type": "string", "operation": "equals" }
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
-      "id": "a7-failure",
-      "name": "Failure Logger",
+      "id": "a-if",
+      "name": "Laravel configured?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [660, 500]
+      "position": [1060, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "PLACEHOLDER_LARAVEL_API_URL/api/ai-calls/{{$('Webhook (Laravel → n8n)').item.json.body.call.id}}/status",
+        "url": "={{ $json.laravel_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-N8N-Secret", "value": "={{ $env.N8N_WEBHOOK_SECRET || '' }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ status: 'failed', error_message: $json.error }) }}",
+        "jsonBody": "={{ $json.status_body }}",
         "options": {}
       },
-      "id": "a8-failreport",
-      "name": "Report Failure to Laravel",
+      "id": "a-laravel",
+      "name": "Update Laravel",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, 500]
+      "position": [1300, 180],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Shape result').item.json.retell) }}",
+        "options": {}
+      },
+      "id": "a-respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, 300]
     }
   ],
   "connections": {
-    "a1-webhook": { "main": [[{ "node": "a2-guard", "type": "main", "index": 0 }]] },
-    "a2-guard": { "main": [[{ "node": "a3-checks", "type": "main", "index": 0 }]] },
-    "a3-checks": { "main": [[{ "node": "a4-retell", "type": "main", "index": 0 }]] },
-    "a4-retell": {
+    "Laravel webhook": {
+      "main": [[{ "node": "Build phone call", "type": "main", "index": 0 }]]
+    },
+    "Build phone call": {
+      "main": [[{ "node": "Call Retell", "type": "main", "index": 0 }]]
+    },
+    "Call Retell": {
+      "main": [[{ "node": "Shape result", "type": "main", "index": 0 }]]
+    },
+    "Shape result": {
+      "main": [[{ "node": "Laravel configured?", "type": "main", "index": 0 }]]
+    },
+    "Laravel configured?": {
       "main": [
-        [
-          { "node": "a5-laravel", "type": "main", "index": 0 },
-          { "node": "a7-failure", "type": "main", "index": 0 }
-        ]
+        [{ "node": "Update Laravel", "type": "main", "index": 0 }],
+        [{ "node": "Respond", "type": "main", "index": 0 }]
       ]
     },
-    "a5-laravel": { "main": [[{ "node": "a6-respond", "type": "main", "index": 0 }]] },
-    "a7-failure": { "main": [[{ "node": "a8-failreport", "type": "main", "index": 0 }]] }
+    "Update Laravel": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
   },
-  "settings": { "executionOrder": "v1", "saveExecutionProgress": true },
-  "tags": ["bdhousing", "ai-calling"]
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": { "templateCredsSetupCompleted": true }
 }

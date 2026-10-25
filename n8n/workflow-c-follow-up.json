@@ -12,10 +12,10 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "PLACEHOLDER_LARAVEL_API_URL/api/leads?eligible_for_follow_up=1",
+        "url": "={{ ($env.LARAVEL_API_URL || '').replace(/\\/$/, '') + '/api/leads?eligible_for_follow_up=1' }}",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "X-N8N-Secret", "value": "PLACEHOLDER_N8N_WEBHOOK_SECRET" }]
+          "parameters": [{ "name": "X-N8N-Secret", "value": "={{ $env.N8N_WEBHOOK_SECRET || '' }}" }]
         },
         "options": { "response": { "response": { "responseFormat": "json" } } }
       },
@@ -38,10 +38,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "PLACEHOLDER_LARAVEL_API_URL/api/ai-calls/outbound",
+        "url": "={{ ($env.LARAVEL_API_URL || '').replace(/\\/$/, '') + '/api/ai-calls/outbound' }}",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "X-N8N-Secret", "value": "PLACEHOLDER_N8N_WEBHOOK_SECRET" }]
+          "parameters": [{ "name": "X-N8N-Secret", "value": "={{ $env.N8N_WEBHOOK_SECRET || '' }}" }]
         },
         "sendBody": true,
         "specifyBody": "json",
@@ -67,10 +67,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "PLACEHOLDER_LARAVEL_API_URL/api/follow-up-tasks",
+        "url": "={{ ($env.LARAVEL_API_URL || '').replace(/\\/$/, '') + '/api/follow-up-tasks' }}",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "X-N8N-Secret", "value": "PLACEHOLDER_N8N_WEBHOOK_SECRET" }]
+          "parameters": [{ "name": "X-N8N-Secret", "value": "={{ $env.N8N_WEBHOOK_SECRET || '' }}" }]
         },
         "sendBody": true,
         "specifyBody": "json",
@@ -85,11 +85,11 @@
     }
   ],
   "connections": {
-    "c1-schedule": { "main": [[{ "node": "c2-eligible", "type": "main", "index": 0 }]] },
-    "c2-eligible": { "main": [[{ "node": "c3-checks", "type": "main", "index": 0 }]] },
-    "c3-checks": { "main": [[{ "node": "c4-queue", "type": "main", "index": 0 }]] },
-    "c4-queue": { "main": [[{ "node": "c5-task", "type": "main", "index": 0 }]] },
-    "c5-task": { "main": [[{ "node": "c6-laravel", "type": "main", "index": 0 }]] }
+    "Every 6 Hours": { "main": [[{ "node": "Laravel — Eligible Leads", "type": "main", "index": 0 }]] },
+    "Laravel — Eligible Leads": { "main": [[{ "node": "Schedule + Consent + Rate Limit", "type": "main", "index": 0 }]] },
+    "Schedule + Consent + Rate Limit": { "main": [[{ "node": "Laravel — Queue Follow-up Call", "type": "main", "index": 0 }]] },
+    "Laravel — Queue Follow-up Call": { "main": [[{ "node": "Follow-up Task Payload", "type": "main", "index": 0 }]] },
+    "Follow-up Task Payload": { "main": [[{ "node": "Laravel — Create Follow-up Task", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1", "saveExecutionProgress": true },
   "tags": ["bdhousing", "ai-calling"]
