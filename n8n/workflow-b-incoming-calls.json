@@ -1,0 +1,109 @@
+{
+  "name": "BDHousing — Workflow B: Incoming Calls (Retell webhooks)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bdhousing/retell-webhook",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "b1-webhook",
+      "name": "Webhook (Retell events)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-200, 300],
+      "webhookId": "PLACEHOLDER-BDHOUSING-RETELL-WEBHOOK"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retell webhook verification + event idempotency pre-check\nconst body = $json.body;\nif (body.headers['x-retell-signature'] !== 'PLACEHOLDER_RETELL_WEBHOOK_SECRET_HASH') {\n  // NOTE: implement HMAC-SHA256 verification of the raw payload with RETELL_WEBHOOK_SECRET\n  throw new Error('Invalid Retell webhook signature');\n}\nconst event = body.event;\nconst call = body.call || {};\nif (!['call.started', 'call.analyzed', 'call.ended'].includes(event)) {\n  return []; // ignore unknown events\n}\nreturn [{ json: { event, call } }];"
+      },
+      "id": "b2-verify",
+      "name": "Verify Signature + Filter Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "PLACEHOLDER_LARAVEL_API_URL/api/retell/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Retell-Signature", "value": "={{$json.headers['x-retell-signature']}}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event: $json.event, call: $json.call }) }}",
+        "options": { "retry": { "maxTries": 3, "waitBetweenTries": 5000 } }
+      },
+      "id": "b3-laravel",
+      "name": "Laravel — Retell Webhook (idempotent)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "version": 2 },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.event }}",
+              "rightValue": "call.ended",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "b4-ended",
+      "name": "Call Ended?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Laravel matches/creates the lead from the phone number.\n// This node can also query Laravel directly if the caller is unknown:\nconst ended = $json;\nreturn [{ json: {\n  customer_lookup_required: !ended.call?.lead_id,\n  phone: ended.call?.to_number || ended.call?.from_number,\n  ...ended\n} }];"
+      },
+      "id": "b5-lookup",
+      "name": "Customer Lookup / Creation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "PLACEHOLDER_LARAVEL_API_URL/api/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Secret", "value": "PLACEHOLDER_N8N_WEBHOOK_SECRET" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ full_name: $json.call.extraction?.full_name || 'Unknown caller', phone: $json.phone, preferred_language: $json.call.extraction?.preferred_language || 'bn', interest_type: $json.call.extraction?.interest_type || 'general_inquiry', source: 'ai_incoming_call' }) }}",
+        "options": {}
+      },
+      "id": "b6-createlead",
+      "name": "Laravel — Create/Update Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    }
+  ],
+  "connections": {
+    "b1-webhook": { "main": [[{ "node": "b2-verify", "type": "main", "index": 0 }]] },
+    "b2-verify": { "main": [[{ "node": "b3-laravel", "type": "main", "index": 0 }]] },
+    "b3-laravel": { "main": [[{ "node": "b4-ended", "type": "main", "index": 0 }]] },
+    "b4-ended": { "main": [[{ "node": "b5-lookup", "type": "main", "index": 0 }]] },
+    "b5-lookup": { "main": [[{ "node": "b6-createlead", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveExecutionProgress": true },
+  "tags": ["bdhousing", "ai-calling"]
+}

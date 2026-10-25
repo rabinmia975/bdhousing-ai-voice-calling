@@ -1,0 +1,96 @@
+{
+  "name": "BDHousing — Workflow C: Follow-ups",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 6 }] } },
+      "id": "c1-schedule",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "PLACEHOLDER_LARAVEL_API_URL/api/leads?eligible_for_follow_up=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Secret", "value": "PLACEHOLDER_N8N_WEBHOOK_SECRET" }]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "id": "c2-eligible",
+      "name": "Laravel — Eligible Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Schedule + consent + duplicate checks, and a simple rate limit:\n// max PLACEHOLDER_MAX_CALLS_PER_RUN follow-up calls per execution.\nconst leads = $json.data || $json;\nconst MAX_PER_RUN = 10;\nconst out = [];\nfor (const lead of leads) {\n  if (out.length >= MAX_PER_RUN) break;\n  const due = lead.follow_up_due_at ? new Date(lead.follow_up_due_at) <= new Date() : false;\n  if (!due) continue;\n  if (lead.status === 'do_not_call' || !lead.follow_up_consent) continue;\n  if (lead.active_call_exists) continue; // duplicate prevention\n  out.push({ json: lead });\n}\nreturn out;"
+      },
+      "id": "c3-checks",
+      "name": "Schedule + Consent + Rate Limit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "PLACEHOLDER_LARAVEL_API_URL/api/ai-calls/outbound",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Secret", "value": "PLACEHOLDER_N8N_WEBHOOK_SECRET" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ lead_id: $json.id, purpose: 'follow_up', call_purpose: 'Follow-up call' }) }}",
+        "options": { "retry": { "maxTries": 3, "waitBetweenTries": 5000 } }
+      },
+      "id": "c4-queue",
+      "name": "Laravel — Queue Follow-up Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// create a pending follow-up task so the outcome is always tracked,\n// even if the call itself later fails.\nconst lead = $('Laravel — Eligible Leads').item;\nconst res = $json;\nreturn [{ json: {\n  lead_id: lead.id,\n  call_id: res.call_id || res.data?.id || null,\n  due_at: lead.follow_up_due_at,\n  notes: 'Auto-created by n8n Workflow C'\n} }];"
+      },
+      "id": "c5-task",
+      "name": "Follow-up Task Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "PLACEHOLDER_LARAVEL_API_URL/api/follow-up-tasks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-N8N-Secret", "value": "PLACEHOLDER_N8N_WEBHOOK_SECRET" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ property_lead_id: $json.lead_id, ai_call_id: $json.call_id, due_at: $json.due_at, notes: $json.notes }) }}",
+        "options": {}
+      },
+      "id": "c6-laravel",
+      "name": "Laravel — Create Follow-up Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    }
+  ],
+  "connections": {
+    "c1-schedule": { "main": [[{ "node": "c2-eligible", "type": "main", "index": 0 }]] },
+    "c2-eligible": { "main": [[{ "node": "c3-checks", "type": "main", "index": 0 }]] },
+    "c3-checks": { "main": [[{ "node": "c4-queue", "type": "main", "index": 0 }]] },
+    "c4-queue": { "main": [[{ "node": "c5-task", "type": "main", "index": 0 }]] },
+    "c5-task": { "main": [[{ "node": "c6-laravel", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveExecutionProgress": true },
+  "tags": ["bdhousing", "ai-calling"]
+}
