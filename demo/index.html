@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BDHousing — AI Voice Agent (Demo Mode)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .nav-item.active { background: rgba(255,255,255,.12); color: #fff; }
+  .status-dot { width: 10px; height: 10px; border-radius: 9999px; display: inline-block; }
+  .modal-backdrop { background: rgba(15,23,42,.55); }
+  @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(249,115,22,.5);} 70% { box-shadow: 0 0 0 14px rgba(249,115,22,0);} 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0);} }
+  .ringing { animation: pulse-ring 1.4s infinite; }
+  .typing span { display:inline-block; width:6px; height:6px; border-radius:50%; background:#94a3b8; margin:0 1px; animation: blink 1s infinite; }
+  .typing span:nth-child(2){ animation-delay:.2s } .typing span:nth-child(3){ animation-delay:.4s }
+  @keyframes blink { 0%,100%{opacity:.2} 50%{opacity:1} }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+<div class="flex min-h-screen">
+
+  <!-- ============ SIDEBAR (dark navy) ============ -->
+  <aside id="sidebar" class="w-64 bg-[#0b1f3a] text-slate-300 flex flex-col fixed inset-y-0 left-0 z-30 md:static">
+    <div class="px-5 py-5 border-b border-white/10 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-orange-500 flex items-center justify-center text-white font-bold">BD</div>
+      <div>
+        <p class="text-white font-semibold leading-tight">BDHousing</p>
+        <p class="text-xs text-slate-400">AI Voice Agent Console</p>
+      </div>
+    </div>
+    <nav class="flex-1 py-4 space-y-1 px-3 text-sm" id="nav">
+      <button data-page="agent" class="nav-item active w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>🤖</span> AI Voice Agent</button>
+      <button data-page="leads" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>👥</span> Customer Leads</button>
+      <button data-page="history" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>📞</span> Call History</button>
+      <button data-page="incoming" class="nav-item w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/10 flex items-center gap-3"><span>☎️</span> Incoming Call Demo</button>
+    </nav>
+    <div class="px-5 py-4 border-t border-white/10 text-xs">
+      <div class="flex items-center gap-2 text-emerald-400"><span class="status-dot bg-emerald-400"></span> <span id="mode-label">Demo Mode — No real call is being placed</span></div>
+      <p class="text-slate-500 mt-2">Provider: Retell AI (simulated)</p>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="flex-1 md:ml-0 ml-64 transition-all" id="main">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20">
+      <div>
+        <h1 id="page-title" class="text-xl font-semibold text-slate-900">AI Voice Agent</h1>
+        <p class="text-xs text-slate-500">BDHousing AI Assistant · Retell AI provider</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1">⚠️ Demo Mode — No real call is being placed</span>
+        <div class="w-9 h-9 rounded-full bg-[#0b1f3a] text-white flex items-center justify-center text-sm">RM</div>
+      </div>
+    </header>
+
+    <div class="p-6 space-y-6" id="content"></div>
+  </main>
+</div>
+
+<!-- ============ LEAD / CALL MODAL ============ -->
+<div id="modal" class="hidden fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
+      <h3 id="modal-title" class="font-semibold text-slate-900"></h3>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">✕</button>
+    </div>
+    <div id="modal-body" class="px-6 py-4 text-sm"></div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   BDHousing AI Voice Agent — DEMO BUILD
+   Demo Mode: everything runs locally in the browser (localStorage).
+   Integration points where the real Laravel API would be called are
+   marked with apiCall() stubs — see docs/laravel-backend-plan.md.
+   Never mark a simulated call as live. No real telephony is touched.
+   ===================================================================== */
+
+const LS_LEADS = 'bdh_leads_v1', LS_CALLS = 'bdh_calls_v1';
+const store = {
+  get(k, fallback){ try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } },
+  set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+};
+
+/* ---------- mock/simulated provider status ---------- */
+const AGENT = {
+  name: 'BDHousing AI Assistant',
+  status: 'Active',
+  provider: 'Retell AI',
+  languages: ['Bangla', 'English'],
+  incoming: false,          // live telephony not configured in demo
+  outgoing: false,
+  sip: 'Not configured (demo)',
+  n8n: 'Simulated',
+  laravel: 'Simulated'
+};
+
+/* ---------- seed sample data (clearly labeled) ---------- */
+function seed(){
+  if (!store.get(LS_LEADS, null)) {
+    store.set(LS_LEADS, [
+      { id:'L-1001', full_name:'Sample: Karim Uddin', phone:'+8801711223344', language:'bn', interest_type:'buy', area:'Uttara, Dhaka', property_type:'apartment', budget:'৳80–120 lakh', size_sqft:'1350', bedrooms:'3', timeline:'3 months', financing:'Yes (voluntary)', extra:'Near school', interest_level:'Warm', callback:'2026-10-28 11:00', followup_consent:true, lead_score:72, status:'interested', assigned:'Sales Rep A', is_demo:true, created:'2026-10-22T10:12:00', summary:'Demo sample lead — interested in 3BR Uttara apartment, budget 80–120 lakh, wants callback next week.' },
+      { id:'L-1002', full_name:'Sample: Nusrat Jahan', phone:'+8801899555666', language:'en', interest_type:'rent', area:'Dhanmondi, Dhaka', property_type:'apartment', budget:'৳35–45k/mo', size_sqft:'1100', bedrooms:'2', timeline:'Immediately', financing:'', extra:'', interest_level:'Hot', callback:'', followup_consent:true, lead_score:85, status:'qualified', assigned:'Sales Rep B', is_demo:true, created:'2026-10-24T15:40:00', summary:'Demo sample lead — urgent rental need in Dhanmondi, ready to visit properties this week.' }
+    ]);
+  }
+  if (!store.get(LS_CALLS, null)) {
+    store.set(LS_CALLS, [
+      { id:'C-2001', lead:'L-1001', name:'Sample: Karim Uddin', phone:'+8801711223344', direction:'outgoing', started:'2026-10-22T10:12:00', duration:214, status:'completed', outcome:'interested', agent:'BDHousing AI Assistant', mode:'demo', is_demo:true, summary:'Discussed 3BR apartments in Uttara; customer wants a callback next week.', transcript:[
+        {s:'ai', t:'আসসালামু আলাইকুম। আমি BDHousing-এর AI assistant। আপনি কি বাড়ি বা ফ্ল্যাট কেনা, ভাড়া নেওয়া, অথবা property সম্পর্কে তথ্য পেতে আগ্রহী?'},
+        {s:'customer', t:'জি, উত্তরায় একটা ফ্ল্যাট কিনতে চাই।'},
+        {s:'ai', t:'ধন্যবাদ! আপনার নাম জানতে পারি কি?'},
+        {s:'customer', t:'করিম উদ্দিন।'},
+        {s:'ai', t:'আপনার বাজেট কেমন হলে স্বাচ্ছন্দ্যে থাকবে, করিম ভাই?'}
+      ]},
+      { id:'C-2002', lead:'L-1002', name:'Sample: Nusrat Jahan', phone:'+8801899555666', direction:'outgoing', started:'2026-10-24T15:40:00', duration:186, status:'completed', outcome:'callback_requested', agent:'BDHousing AI Assistant', mode:'demo', is_demo:true, summary:'Rental inquiry in Dhanmondi, urgent. Asked for a human representative to call today.', transcript:[
+        {s:'ai', t:'Hello, this is BDHousing’s AI assistant. Are you interested in buying, renting, or property information?'},
+        {s:'customer', t:'Yes, renting in Dhanmondi. Can a real person call me back today?'}
+      ]}
+    ]);
+  }
+}
+seed();
+
+/* ---------- helpers ---------- */
+const $content = document.getElementById('content');
+const $title = document.getElementById('page-title');
+const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+const fmtDur  = s => Math.floor(s/60)+'m '+(s%60)+'s';
+const statusColor = { new:'bg-sky-100 text-sky-700', contacted:'bg-slate-200 text-slate-700', interested:'bg-emerald-100 text-emerald-700', qualified:'bg-green-600 text-white', follow_up_required:'bg-amber-100 text-amber-700', converted:'bg-green-700 text-white', not_interested:'bg-rose-100 text-rose-700', do_not_call:'bg-red-600 text-white' };
+const callStatusColor = { queued:'bg-slate-200 text-slate-700', initiated:'bg-sky-100 text-sky-700', ringing:'bg-amber-100 text-amber-700', in_progress:'bg-orange-500 text-white', completed:'bg-green-600 text-white', failed:'bg-red-600 text-white', cancelled:'bg-slate-300 text-slate-600' };
+const apiCall = (path, opts) => { /* REAL INTEGRATION POINT — demo build returns locally */ return null; };
+
+/* ---------- navigation ---------- */
+document.querySelectorAll('#nav .nav-item').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#nav .nav-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const p = btn.dataset.page;
+  $title.textContent = { agent:'AI Voice Agent', leads:'Customer Leads', history:'Call History & Analytics', incoming:'Incoming Call Demo' }[p];
+  if (p === 'agent') renderAgent(); else if (p==='leads') renderLeads(); else if (p==='history') renderHistory(); else renderIncoming();
+}));
+function closeModal(){ document.getElementById('modal').classList.add('hidden'); }
+
+/* =====================================================================
+   PAGE 1 — AI VOICE AGENT (dashboard + outgoing call demo)
+   ===================================================================== */
+let activeSim = null;
+function renderAgent(){
+  const calls = store.get(LS_CALLS, []);
+  const completed = calls.filter(c=>c.status==='completed').length;
+  const failed = calls.filter(c=>c.status==='failed').length;
+  $content.innerHTML = `
+  <div class="bg-white rounded-xl border border-slate-200 p-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-xl bg-[#0b1f3a] flex items-center justify-center text-2xl">🤖</div>
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900">${AGENT.name}</h2>
+          <p class="text-sm text-slate-500">Provider: ${AGENT.provider} · Languages: ${AGENT.languages.join(', ')}</p>
+          <div class="flex gap-2 mt-2 text-xs">
+            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 bg-emerald-100 text-emerald-700"><span class="status-dot bg-emerald-500"></span>${AGENT.status}</span>
+            <span class="rounded-full px-2.5 py-1 bg-amber-100 text-amber-700">Bangla voice: pending verification</span>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        ${statRow('Incoming calls', AGENT.incoming)}
+        ${statRow('Outgoing calls', AGENT.outgoing)}
+        ${connRow('Phone / SIP', AGENT.sip)}
+        ${connRow('n8n', AGENT.n8n)}
+        ${connRow('Laravel API', AGENT.laravel)}
+      </div>
+    </div>
+    <p class="mt-4 text-xs text-slate-400">Live telephony is not configured, so calling runs in <b>simulation</b>. When Retell API keys, phone number, and n8n are configured, these turn green and "Test AI Call" routes through Laravel → n8n → Retell.</p>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+    ${statCard('Total calls', calls.length)}
+    ${statCard('Completed', completed)}
+    ${statCard('Failed', failed)}
+    ${statCard('Interested leads', store.get(LS_LEADS,[]).filter(l=>['interested','qualified'].includes(l.status)).length)}
+    ${statCard('Qualified', store.get(LS_LEADS,[]).filter(l=>l.status==='qualified').length)}
+    ${statCard('Follow-ups', store.get(LS_LEADS,[]).filter(l=>l.callback).length)}
+  </div>
+
+  <div class="grid lg:grid-cols-2 gap-6">
+    <!-- Test AI Call form -->
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold text-slate-900 mb-1">Outgoing Call Demo</h3>
+      <p class="text-xs text-amber-700 mb-4">Simulation — No real phone call will be placed.</p>
+      <form id="call-form" class="space-y-3 text-sm">
+        ${inputField('Customer name', 'cname', 'text', 'e.g. Rahim Ahmed')}
+        ${inputField('Customer phone (with country code)', 'cphone', 'tel', '+8801XXXXXXXXX')}
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="block text-slate-600 mb-1">Preferred language</label>
+            <select id="clang" class="w-full border border-slate-300 rounded-lg px-3 py-2"><option value="bn">Bangla</option><option value="en">English</option></select></div>
+          <div><label class="block text-slate-600 mb-1">Property interest</label>
+            <select id="cinterest" class="w-full border border-slate-300 rounded-lg px-3 py-2"><option value="apartment">Apartment</option><option value="house">House</option><option value="land">Land</option><option value="commercial">Commercial</option></select></div>
+        </div>
+        <div><label class="block text-slate-600 mb-1">Call purpose</label>
+          <select id="cpurpose" class="w-full border border-slate-300 rounded-lg px-3 py-2"><option>Lead follow-up</option><option>New property introduction</option><option>General inquiry</option></select></div>
+        <label class="flex items-start gap-2 text-slate-600"><input type="checkbox" id="cconsent" class="mt-0.5"> <span>I confirm this customer has given consent to be called (required for live calls).</span></label>
+        <p id="form-error" class="hidden text-rose-600 text-xs"></p>
+        <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg py-2.5">📞 Test AI Call</button>
+      </form>
+    </div>
+
+    <!-- Call activity panel -->
+    <div class="bg-white rounded-xl border border-slate-200 p-6 flex flex-col">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-slate-900">Call Activity</h3>
+        <span id="sim-status" class="text-xs rounded-full px-3 py-1 bg-slate-200 text-slate-600">Idle</span>
+      </div>
+      <div id="sim-panel" class="flex-1 overflow-y-auto space-y-3 max-h-[420px] text-sm">
+        <p class="text-slate-400 text-center py-10">Start a test call to see the simulated AI conversation.</p>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('call-form').addEventListener('submit', startOutgoingSim);
+}
+const statRow = (label, on) => `<div class="flex items-center gap-2"><span class="status-dot ${on?'bg-emerald-500':'bg-slate-300'}"></span><span class="text-slate-500">${label}:</span><span class="font-medium">${on?'Enabled':'Disabled'}</span></div>`;
+const connRow = (label, val) => `<div class="flex items-center gap-2 text-slate-500">${label}: <span class="font-medium text-slate-700">${val}</span></div>`;
+const statCard = (label, v) => `<div class="bg-white rounded-xl border border-slate-200 p-4"><p class="text-xs text-slate-500">${label}</p><p class="text-2xl font-semibold text-slate-900 mt-1">${v}</p></div>`;
+const inputField = (label, id, type, ph) => `<div><label class="block text-slate-600 mb-1">${label}</label><input id="${id}" type="${type}" placeholder="${ph}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></div>`;
+
+/* ---------- outgoing call simulation engine ---------- */
+function startOutgoingSim(e){
+  e.preventDefault();
+  const name = document.getElementById('cname').value.trim();
+  const phone = document.getElementById('cphone').value.trim();
+  const lang = document.getElementById('clang').value;
+  const interest = document.getElementById('cinterest').value;
+  const purpose = document.getElementById('cpurpose').value;
+  const consent = document.getElementById('cconsent').checked;
+  const err = document.getElementById('form-error');
+  if (!name) return showError(err, 'Customer name is required.');
+  if (!/^\+?[1-9]\d{7,14}$/.test(phone.replace(/[\s-]/g,''))) return showError(err, 'Enter a valid phone number with country code, e.g. +8801711223344.');
+  if (!consent) return showError(err, 'Customer consent must be confirmed before any call (even simulated).');
+  err.classList.add('hidden');
+
+  // LIVE MODE INTEGRATION POINT (not reachable in demo build):
+  // POST /api/ai-calls/outbound → Laravel → n8n Workflow A → Retell create-phone-call.
+  // Demo build: run simulation only. Never claim a real call was placed.
+  runSimulation({ name, phone, lang, interest, purpose, direction:'outgoing' });
+}
+function showError(err, msg){ err.textContent = msg; err.classList.remove('hidden'); }
+
+function simScript(name, lang, interest){
+  const bn = lang !== 'en';
+  const s = bn ? [
+    ['ai','আসসালামু আলাইকুম। আমি BDHousing-এর AI assistant। আপনি কি বাড়ি বা ফ্ল্যাট কেনা, ভাড়া নেওয়া, অথবা property সম্পর্কে তথ্য পেতে আগ্রহী?'],
+    ['customer','জি, আমি আগ্রহী।'],
+    ['ai','ধন্যবাদ! আপনার নাম জানতে পারি কি?'],
+    ['customer', name],
+    ['ai','আপনি কোন এলাকায় বাসা খুঁজছেন?'],
+    ['customer','গুলশান, ঢাকা।'],
+    ['ai','আপনার বাজেট কেমন হলে ভালো হয়?'],
+    ['customer','৮০ থেকে ১২০ লাখ টাকা।'],
+    ['ai','কয়টা বেডরুম প্রয়োজন হবে?'],
+    ['customer','তিনটা।'],
+    ['ai','কখন থেকে বাসা নিতে চান?'],
+    ['customer','দুই-তিন মাসের মধ্যে।'],
+    ['ai','আর কিছু বিশেষ চাহিদা আছে কি? (চাইলে এই প্রশ্নটি এড়িয়ে যেতে পারেন)'],
+    ['customer','লিফট আর গাড়ি পার্কিং থাকলে ভালো হয়।'],
+    ['ai','আপনাকে পরে আবার ফোন করতে পারি কি?'],
+    ['customer','জি, অবশ্যই।'],
+    ['ai','ধন্যবাদ, আপনার সময়ের জন্য। BDHousing আপনার সেবায় আছে। আল্লাহ হাফেজ।']
+  ] : [
+    ['ai','Hello! This is BDHousing’s AI assistant. Are you interested in buying, renting, or property information?'],
+    ['customer','Yes, interested.'],
+    ['ai','Thank you! May I have your name?'],
+    ['customer', name],
+    ['ai','Which area are you looking at?'],
+    ['customer','Gulshan, Dhaka.'],
+    ['ai','What is your budget range?'],
+    ['customer','80 to 120 lakh BDT.'],
+    ['ai','How many bedrooms do you need?'],
+    ['customer','Three.'],
+    ['ai','When do you plan to move in?'],
+    ['customer','Within two to three months.'],
+    ['ai','Any special requirements? (You can skip this question)'],
+    ['customer','Lift and parking would be nice.'],
+    ['ai','May we call you again for follow-up?'],
+    ['customer','Yes, of course.'],
+    ['ai','Thank you for your time. BDHousing is at your service. Goodbye!']
+  ];
+  return s;
+}
+
+function runSimulation(ctx){
+  if (activeSim) return;
+  const panel = document.getElementById('sim-panel');
+  const badge = document.getElementById('sim-status');
+  const callId = 'C-' + Math.floor(1000 + Math.random()*9000);
+  const stages = [
+    ['queued', 'Queued', 700],
+    ['initiated', 'Initiated (simulated)', 900],
+    ['ringing', 'Ringing — simulated connection', 1400],
+    ['in_progress', 'In Progress — AI conversation', 1200]
+  ];
+  activeSim = { id: callId, ctx, cancelled: false, turns: [], startedAt: new Date().toISOString() };
+  panel.innerHTML = `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠️ Simulation — No real phone call is being placed.</p>`;
+  badge.className = 'text-xs rounded-full px-3 py-1 bg-slate-200 text-slate-600';
+  let i = 0;
+  activeSim.target = { panel, badge };
+  const nextStage = () => {
+    if (!activeSim || activeSim.cancelled) return;
+    if (i < stages.length){
+      const [key, label, ms] = stages[i++];
+      badge.textContent = label;
+      badge.className = `text-xs rounded-full px-3 py-1 ${callStatusColor[key]}`;
+      if (key === 'ringing' || key === 'in_progress') badge.classList.add('ringing'); else badge.classList.remove('ringing');
+      badge.className = `text-xs rounded-full px-3 py-1 ${callStatusColor[key]}` + (key==='ringing'||key==='in_progress' ? ' ringing' : '');
+      setTimeout(nextStage, ms);
+    } else { runConversation(); }
+  };
+  nextStage();
+
+  function runConversation(){
+    const script = simScript(ctx.name, ctx.lang, ctx.interest);
+    let t = 0;
+    const speak = () => {
+      if (!activeSim || activeSim.cancelled) return;
+      if (t < script.length){
+        const [who, text] = script[t++];
+        activeSim.turns.push({ s: who === 'ai' ? 'ai' : 'customer', t: text });
+        const p = (activeSim.target && activeSim.target.panel) || panel;
+        p.insertAdjacentHTML('beforeend', bubble(who, text));
+        p.scrollTop = p.scrollHeight;
+        setTimeout(speak, who === 'ai' ? 1100 : 900);
+      } else { finishSim('completed'); }
+    };
+    speak();
+  }
+}
+
+function bubble(who, text){
+  const ai = who === 'ai';
+  return `<div class="flex ${ai?'':'justify-end'}"><div class="${ai?'bg-[#0b1f3a] text-white':'bg-orange-100 text-slate-800'} rounded-xl px-3.5 py-2 max-w-[85%]"><p class="text-[10px] uppercase tracking-wide ${ai?'text-slate-400':'text-orange-500'} mb-0.5">${ai?'AI Assistant':'Customer (simulated)'}</p>${text}</div></div>`;
+}
+
+function finishSim(status){
+  if (!activeSim) return;
+  const { ctx, turns } = activeSim;
+  const ui = activeSim.target || { panel: document.getElementById('sim-panel'), badge: document.getElementById('sim-status') };
+  const duration = 150 + Math.floor(Math.random()*120);
+  const now = new Date();
+  // simulated extraction → demo lead (is_demo=true, mode=demo)
+  const lead = {
+    id: 'L-' + Math.floor(1000 + Math.random()*9000),
+    full_name: ctx.name, phone: ctx.phone, language: ctx.lang,
+    interest_type: ctx.direction === 'incoming' ? 'general_inquiry' : (ctx.purpose === 'Lead follow-up' ? 'buy' : 'general_inquiry'),
+    area: ctx.direction === 'incoming' ? 'Mirpur, Dhaka' : 'Gulshan, Dhaka',
+    property_type: ctx.interest || 'apartment',
+    budget: '৳80–120 lakh', size_sqft: '1450', bedrooms: '3',
+    timeline: '2–3 months', financing: '', extra: 'Lift & parking preferred',
+    interest_level: 'Hot', callback: new Date(now.getTime()+3*864e5).toISOString().slice(0,16),
+    followup_consent: true, lead_score: 78, status: 'interested',
+    assigned: 'Unassigned', is_demo: true, created: now.toISOString(),
+    summary: `AI call summary (demo): ${ctx.name} is interested in ${ctx.interest||'property'} in ${ctx.direction==='incoming'?'Mirpur':'Gulshan'}, budget ৳80–120 lakh, wants follow-up.`
+  };
+  const call = {
+    id: activeSim.id, lead: lead.id, name: lead.full_name, phone: lead.phone,
+    direction: ctx.direction, started: now.toISOString(), duration,
+    status, outcome: status === 'completed' ? 'interested' : status,
+    agent: AGENT.name, mode: 'demo', is_demo: true,
+    summary: lead.summary, transcript: turns
+  };
+  store.set(LS_LEADS, [lead, ...store.get(LS_LEADS, [])]);
+  store.set(LS_CALLS, [call, ...store.get(LS_CALLS, [])]);
+  ui.badge.textContent = status === 'completed' ? 'Completed (simulated)' : status;
+  ui.badge.className = `text-xs rounded-full px-3 py-1 ${callStatusColor[status]}`;
+  ui.panel.insertAdjacentHTML('beforeend',
+    `<div class="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-3 py-2 text-xs">
+      Call finished (simulated). Demo lead <b>${lead.id}</b> and call <b>${call.id}</b> saved to the local demo database.</div>`);
+  activeSim = null;
+}
+
+/* =====================================================================
+   PAGE 2 — CUSTOMER LEADS
+   ===================================================================== */
+function renderLeads(){
+  const leads = store.get(LS_LEADS, []);
+  $content.innerHTML = `
+  <div class="bg-white rounded-xl border border-slate-200 p-4">
+    <div class="flex flex-wrap gap-3 items-center text-sm">
+      <input id="lead-search" placeholder="Search name or phone…" class="border border-slate-300 rounded-lg px-3 py-2 flex-1 min-w-[200px]">
+      <select id="f-status" class="border border-slate-300 rounded-lg px-3 py-2"><option value="">All statuses</option>${Object.keys(statusColor).map(s=>`<option>${s.replace(/_/g,' ')}</option>`).join('')}</select>
+      <select id="f-type" class="border border-slate-300 rounded-lg px-3 py-2"><option value="">All property types</option><option>apartment</option><option>house</option><option>land</option><option>commercial</option></select>
+      <button id="export-csv" class="bg-[#0b1f3a] text-white rounded-lg px-4 py-2">Export CSV</button>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
+        <tr><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Phone</th><th class="px-4 py-3">Interest</th><th class="px-4 py-3">Area</th><th class="px-4 py-3">Budget</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Score</th><th class="px-4 py-3">Last Call</th><th class="px-4 py-3">Follow-up</th><th class="px-4 py-3">Status</th><th class="px-4 py-3"></th></tr>
+      </thead>
+      <tbody id="lead-rows" class="divide-y divide-slate-100"></tbody>
+    </table>
+  </div>`;
+  const draw = () => {
+    const q = (document.getElementById('lead-search').value||'').toLowerCase();
+    const st = (document.getElementById('f-status').value||'').replace(/ /g,'_');
+    const ty = document.getElementById('f-type').value;
+    const rows = leads.filter(l =>
+      (!q || l.full_name.toLowerCase().includes(q) || l.phone.includes(q)) &&
+      (!st || l.status === st) && (!ty || l.property_type === ty));
+    document.getElementById('lead-rows').innerHTML = rows.map(l => `
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-3 font-medium">${l.full_name}</td>
+        <td class="px-4 py-3">${l.phone}</td>
+        <td class="px-4 py-3 capitalize">${l.interest_type.replace(/_/g,' ')}</td>
+        <td class="px-4 py-3">${l.area}</td>
+        <td class="px-4 py-3">${l.budget}</td>
+        <td class="px-4 py-3 capitalize">${l.property_type}</td>
+        <td class="px-4 py-3"><span class="font-semibold ${l.lead_score>=80?'text-emerald-600':l.lead_score>=60?'text-amber-600':'text-slate-500'}">${l.lead_score}</span></td>
+        <td class="px-4 py-3">${l.created?fmtDate(l.created):'—'}</td>
+        <td class="px-4 py-3">${l.callback||'—'}</td>
+        <td class="px-4 py-3"><span class="text-xs rounded-full px-2 py-0.5 ${statusColor[l.status]}">${l.status.replace(/_/g,' ')}</span></td>
+        <td class="px-4 py-3"><button onclick="viewLead('${l.id}')" class="text-orange-600 hover:underline text-xs font-medium">View</button></td>
+      </tr>`).join('') || `<tr><td colspan="11" class="px-4 py-8 text-center text-slate-400">No leads match the filters.</td></tr>`;
+  };
+  ['lead-search','f-status','f-type'].forEach(id => document.getElementById(id).addEventListener('input', draw));
+  draw();
+  document.getElementById('export-csv').addEventListener('click', exportCsv);
+}
+
+function viewLead(id){
+  const l = store.get(LS_LEADS, []).find(x=>x.id===id); if(!l) return;
+  const calls = store.get(LS_CALLS, []).filter(c=>c.lead===id);
+  document.getElementById('modal-title').textContent = 'Lead ' + l.id + ' — ' + l.full_name;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      ${kv('Phone', l.phone)} ${kv('Language', l.language)}
+      ${kv('Interest', l.interest_type)} ${kv('Area', l.area)}
+      ${kv('Property type', l.property_type)} ${kv('Budget', l.budget)}
+      ${kv('Size', l.size_sqft+' sqft')} ${kv('Bedrooms', l.bedrooms)}
+      ${kv('Timeline', l.timeline)} ${kv('Interest level', l.interest_level)}
+      ${kv('Follow-up consent', l.followup_consent?'Yes':'No')} ${kv('Assigned rep', l.assigned)}
+      ${kv('Status', l.status.replace(/_/g,' '))} ${kv('Follow-up date', l.callback||'—')}
+    </div>
+    <div class="bg-slate-50 rounded-lg p-3 mb-4"><p class="text-xs uppercase text-slate-500 mb-1">AI call summary</p><p>${l.summary}</p></div>
+    <p class="text-xs uppercase text-slate-500 mb-2">Call history (${calls.length})</p>
+    ${calls.map(c=>`<div class="border border-slate-200 rounded-lg p-3 mb-2 flex justify-between items-center"><div><b>${c.id}</b> · ${c.direction} · ${fmtDate(c.started)} · ${fmtDur(c.duration)}<br><span class="text-slate-500 text-xs">${c.outcome}</span></div><span class="text-xs rounded-full px-2 py-0.5 ${callStatusColor[c.status]}">${c.status}</span></div>`).join('') || '<p class="text-slate-400">No calls yet.</p>'}`;
+  document.getElementById('modal').classList.remove('hidden');
+}
+const kv = (k,v) => `<div><p class="text-xs text-slate-500">${k}</p><p class="font-medium capitalize">${v ?? '—'}</p></div>`;
+
+function exportCsv(){
+  const leads = store.get(LS_LEADS, []);
+  const head = ['Customer','Phone','Interest Type','Preferred Area','Budget','Property Type','Lead Score','Last Call','Follow-up Date','Status'];
+  const csv = [head.join(',')].concat(leads.map(l =>
+    [l.full_name,l.phone,l.interest_type,l.area,l.budget,l.property_type,l.lead_score,l.created,l.callback,l.status]
+    .map(v=>`"${(v??'').toString().replace(/"/g,'""')}"`).join(','))).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'bdhousing-leads.csv'; a.click();
+}
+
+/* =====================================================================
+   PAGE 3 — CALL HISTORY & ANALYTICS
+   ===================================================================== */
+function renderHistory(){
+  const calls = store.get(LS_CALLS, []);
+  const leads = store.get(LS_LEADS, []);
+  $content.innerHTML = `
+  <div class="grid grid-cols-2 md:grid-cols-7 gap-3">
+    ${statCard('Total calls', calls.length)}
+    ${statCard('Answered', calls.filter(c=>c.status==='completed'||c.status==='in_progress').length)}
+    ${statCard('Completed', calls.filter(c=>c.status==='completed').length)}
+    ${statCard('Interested', leads.filter(l=>l.status==='interested').length)}
+    ${statCard('Qualified', leads.filter(l=>l.status==='qualified').length)}
+    ${statCard('Failed', calls.filter(c=>c.status==='failed').length)}
+    ${statCard('Follow-up tasks', leads.filter(l=>l.callback).length)}
+  </div>
+  <div class="bg-white rounded-xl border border-slate-200 p-4 text-xs text-slate-500">Data source: local demo database (records created in this browser). Sample seed rows are labeled "Sample". In a connected deployment this page reads live Laravel API data.</div>
+  <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
+        <tr><th class="px-4 py-3">Call ID</th><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Direction</th><th class="px-4 py-3">Start</th><th class="px-4 py-3">Duration</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Agent</th><th class="px-4 py-3">Outcome</th><th class="px-4 py-3">Summary</th><th class="px-4 py-3"></th></tr>
+      </thead>
+      <tbody>${calls.map(c=>`
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3 font-medium">${c.id}${c.is_demo?' <span class="text-[10px] text-amber-600 bg-amber-50 rounded px-1">demo</span>':''}</td>
+          <td class="px-4 py-3">${c.name}</td>
+          <td class="px-4 py-3 capitalize">${c.direction}</td>
+          <td class="px-4 py-3">${fmtDate(c.started)}</td>
+          <td class="px-4 py-3">${fmtDur(c.duration)}</td>
+          <td class="px-4 py-3"><span class="text-xs rounded-full px-2 py-0.5 ${callStatusColor[c.status]}">${c.status.replace(/_/g,' ')}</span></td>
+          <td class="px-4 py-3">${c.agent}</td>
+          <td class="px-4 py-3 capitalize">${c.outcome||'—'}</td>
+          <td class="px-4 py-3 max-w-[240px] truncate" title="${c.summary||''}">${c.summary||'—'}</td>
+          <td class="px-4 py-3"><button onclick="viewCall('${c.id}')" class="text-orange-600 hover:underline text-xs font-medium">Transcript</button></td>
+        </tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+function viewCall(id){
+  const c = store.get(LS_CALLS, []).find(x=>x.id===id); if(!c) return;
+  document.getElementById('modal-title').textContent = 'Call ' + c.id;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="flex flex-wrap gap-2 mb-4 text-xs">
+      <span class="rounded-full px-2 py-0.5 ${callStatusColor[c.status]}">${c.status}</span>
+      <span class="rounded-full px-2 py-0.5 bg-slate-200 text-slate-700 capitalize">${c.direction}</span>
+      <span class="rounded-full px-2 py-0.5 bg-amber-100 text-amber-700">mode: ${c.mode}</span>
+      <span class="rounded-full px-2 py-0.5 bg-slate-100 text-slate-600">${fmtDur(c.duration)}</span>
+    </div>
+    <div class="bg-slate-50 rounded-lg p-3 mb-4"><p class="text-xs uppercase text-slate-500 mb-1">Outcome summary</p>${c.summary||'—'}</div>
+    <p class="text-xs uppercase text-slate-500 mb-2">Transcript ${c.is_demo?'(simulated demo conversation)':''}</p>
+    <div class="space-y-2">${(c.transcript||[]).map(x=>bubble(x.s==='ai'?'ai':'customer', x.t)).join('') || '<p class="text-slate-400">No transcript available.</p>'}</div>`;
+  document.getElementById('modal').classList.remove('hidden');
+}
+
+/* =====================================================================
+   PAGE 4 — INCOMING CALL DEMO
+   ===================================================================== */
+function renderIncoming(){
+  $content.innerHTML = `
+  <div class="grid lg:grid-cols-2 gap-6">
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold text-slate-900 mb-1">Incoming Call Workflow</h3>
+      <p class="text-xs text-amber-700 mb-4">Live incoming calling is not configured — this is an interactive simulation.</p>
+      <ol class="text-sm space-y-2 list-decimal list-inside text-slate-600 mb-5">
+        <li>Caller dials the BDHousing number → provider routes to Retell AI</li>
+        <li>Retell greets the caller and identifies intent</li>
+        <li>AI answers only from verified property data / approved FAQs</li>
+        <li>AI collects lead information, one question at a time</li>
+        <li>Offers a human callback if requested</li>
+        <li>Result saved through the Laravel API (Workflow B)</li>
+      </ol>
+      <button id="btn-incoming" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg py-2.5">☎️ Simulate Incoming Call</button>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-6 flex flex-col">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-slate-900">Simulated Conversation</h3>
+        <span id="inc-status" class="text-xs rounded-full px-3 py-1 bg-slate-200 text-slate-600">Idle</span>
+      </div>
+      <div id="inc-panel" class="flex-1 overflow-y-auto space-y-3 max-h-[420px] text-sm">
+        <p class="text-slate-400 text-center py-10">Click "Simulate Incoming Call" to play the workflow.</p>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('btn-incoming').addEventListener('click', () => {
+    if (activeSim) return;
+    // Reuse the simulation engine pointed at the incoming panel
+    const panel = document.getElementById('sim-panel');
+    const badge = document.getElementById('sim-status');
+    // temporarily bind engine outputs to the incoming panel
+    const simPanel = document.getElementById('inc-panel');
+    const simStatus = document.getElementById('inc-status');
+    const engine = { panel: simPanel, badge: simStatus };
+    activeSim = { id:'C-'+Math.floor(1000+Math.random()*9000), ctx:{ name:'Incoming caller', phone:'+8801XXXXXXXXX', lang:'bn', interest:'apartment', purpose:'Incoming', direction:'incoming' }, cancelled:false, turns:[] , startedAt:new Date().toISOString(), target:engine };
+    simPanel.innerHTML = `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠️ Simulation — No real phone call is being placed.</p>`;
+    simStatus.textContent = 'In Progress — AI conversation';
+    simStatus.className = 'text-xs rounded-full px-3 py-1 ' + callStatusColor.in_progress;
+    const script = [
+      ['ai','আসসালামু আলাইকুম। BDHousing-এ আপনাকে স্বাগতম। আমি BDHousing-এর AI assistant। কীভাবে সাহায্য করতে পারি?'],
+      ['customer','মিরপুরে একটা ফ্ল্যাট ভাড়া নিতে চাই। কি কি আছে?'],
+      ['ai','আপনার জন্য মিরপুরে কয়েকটি ভেরিফায়েড লিস্টিং আছে। বাজেট কেমন হলে ভালো হয়?'],
+      ['customer','মাসে ২০–৩০ হাজার টাকা।'],
+      ['ai','আপনার নাম ও একটি ফোন নম্বর দিতে পারবেন কি? প্রতিনিধি আপনাকে ডিটেইলস দিতে পারবেন।'],
+      ['customer','হুম, মানুষের সাথে কথা বলতে চাই।'],
+      ['ai','অবশ্যই। আমাদের একজন প্রতিনিধি আপনাকে আজই কলব্যাক দিবেন। ধন্যবাদ, BDHousing-এ কল করার জন্য।']
+    ];
+    let t = 0;
+    const speak = () => {
+      if (!activeSim || activeSim.cancelled) return;
+      if (t < script.length){
+        const [who, text] = script[t++];
+        activeSim.turns.push({ s: who === 'ai' ? 'ai' : 'customer', t: text });
+        simPanel.insertAdjacentHTML('beforeend', bubble(who, text));
+        simPanel.scrollTop = simPanel.scrollHeight;
+        setTimeout(speak, who==='ai' ? 1200 : 1000);
+      } else {
+        // finish: save with callback_requested outcome
+        finishSim('completed');
+      }
+    };
+    speak();
+  });
+}
+renderAgent();
+</script>
+</body>
+</html>
