@@ -11,6 +11,6 @@ window.BDHOUSING_RETELL = {
   orgId: "org_b6zBp6LIqhl3aV7n",
   inboundAgentId: "agent_dc1a3df8b89476e4868363ee98",
   outboundAgentId: "agent_2603c7b2c919d2677273e30634",
-  publicKey: "",
+  publicKey: "public_key_59329cf8d8c8e02a02d7a",
   proxyUrl: ""
 };
